@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <IsAotCompatible>true</IsAotCompatible>
+    <PackageId>Mash.MNXFile.Client</PackageId>
+    <Description>Thin C# bindings for the separately installed MNXFile native archive engine. No archive engine or codecs are embedded.</Description>
+    <Authors>Mash</Authors>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../interop/Protocol.cs" Link="Interop/Protocol.cs" />
+    <Compile Include="../MNX/Archive/Flags.cs" Link="Models/Flags.cs" />
+    <Compile Include="../MNX/Archive/Events.cs" Link="Models/Events.cs" />
+    <Compile Include="../MNX/Archive/ArchiveInfo.cs" Link="Models/ArchiveInfo.cs" />
+    <Compile Include="../MNX/Archive/Resume/Models.cs" Link="Models/Resume.cs" />
+    <Compile Include="../MNX/Archive/Codecs/Options.cs" Link="Models/CompressionOptions.cs" />
+    <Compile Include="../Tools/FileSystemTools.cs" Link="Tools/FileSystemTools.cs" />
+    <None Include="README.md" Pack="true" PackagePath="/" />
+  </ItemGroup>
+</Project>

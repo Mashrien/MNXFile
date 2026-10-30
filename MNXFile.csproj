@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Mash.IO.Format.MNX</RootNamespace>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsAotCompatible>true</IsAotCompatible>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageId>Mash.MNXFile</PackageId>
+    <Authors>Mash</Authors>
+    <Description>MNX front-indexed archive engine for large local and network archives.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <None Update="README.md" Pack="true" PackagePath="/" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Snappier" Version="1.3.1" />
+    <PackageReference Include="K4os.Compression.LZ4.Streams" Version="1.3.8" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="MNX/**/*.cs" />
+    <Compile Include="Tools/GuidTools.cs" />
+    <Compile Include="Tools/ShortPacking.cs" />
+    <Compile Include="Tools/FileSystemTools.cs" />
+  </ItemGroup>
+</Project>

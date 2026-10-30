@@ -1,0 +1,76 @@
+<Project>
+  <!-- Direct IDE/project builds reserve a number here. The full-build scripts
+       reserve once and export MNXBuildNumber so all release components agree. -->
+  <UsingTask TaskName="MNXAllocateBuildNumber" TaskFactory="RoslynCodeTaskFactory"
+             AssemblyFile="$(MSBuildToolsPath)/Microsoft.Build.Tasks.Core.dll">
+    <ParameterGroup>
+      <CounterFile ParameterType="System.String" Required="true" />
+      <BuildNumber ParameterType="System.String" Output="true" />
+    </ParameterGroup>
+    <Task>
+      <Using Namespace="System" />
+      <Using Namespace="System.IO" />
+      <Using Namespace="System.Globalization" />
+      <Using Namespace="System.Threading" />
+      <Code Type="Fragment" Language="cs"><![CDATA[
+        FileStream reservation = null;
+        string pending = CounterFile + "." + Guid.NewGuid().ToString("N") + ".pending";
+        try {
+            for (int attempt = 0; attempt < 100 && reservation == null; attempt++) {
+                try {
+                    reservation = new FileStream(CounterFile + ".lock", FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+                    }
+                catch (IOException) {
+                    Thread.Sleep(50);
+                    }
+                }
+            if (reservation == null) {
+                throw new IOException("Another MNX build holds the build-number lock.");
+                }
+            int previous = 0;
+            if (File.Exists(CounterFile)) {
+                previous = int.Parse(File.ReadAllText(CounterFile).Trim(), CultureInfo.InvariantCulture);
+                }
+            int next = checked(previous + 1);
+            if (next < 1 || next > 65534) {
+                throw new InvalidDataException("Build counter must be 1..65534. Bump the release version and explicitly reset BuildNumber.txt when this range is exhausted.");
+                }
+            BuildNumber = next.ToString(CultureInfo.InvariantCulture);
+            File.WriteAllText(pending, BuildNumber);
+            if (File.Exists(CounterFile)) {
+                File.Replace(pending, CounterFile, null);
+                }
+            else {
+                File.Move(pending, CounterFile);
+                }
+            }
+        catch (Exception error) {
+            Log.LogErrorFromException(error, true);
+            return false;
+            }
+        finally {
+            if (reservation != null) {
+                reservation.Dispose();
+                }
+            if (File.Exists(pending)) {
+                File.Delete(pending);
+                }
+            }
+      ]]></Code>
+    </Task>
+  </UsingTask>
+
+  <Target Name="ReserveMNXBuildNumber" BeforeTargets="GetAssemblyVersion"
+          Condition="'$(DesignTimeBuild)' != 'true' and '$(MNXBuildNumberReserved)' != 'true'">
+    <MNXAllocateBuildNumber CounterFile="$(MNXCounterFile)">
+      <Output TaskParameter="BuildNumber" PropertyName="MNXBuildNumber" />
+    </MNXAllocateBuildNumber>
+    <PropertyGroup>
+      <MNXBuildNumberReserved>true</MNXBuildNumberReserved>
+      <Version>$(MNXVersionPrefix)-alpha.$(MNXBuildNumber)</Version>
+      <InformationalVersion>$(Version)</InformationalVersion>
+      <AssemblyVersion>$(MNXVersionPrefix).$(MNXBuildNumber)</AssemblyVersion>
+      <FileVersion>$(AssemblyVersion)</FileVersion>
+    </PropertyGroup>
+  </Target>
+</Project>

@@ -1,0 +1,23 @@
+<Project>
+  <PropertyGroup>
+    <RepositoryUrl>https://github.com/Mashrien/MNXFile</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageProjectUrl>https://github.com/Mashrien/MNXFile</PackageProjectUrl>
+    <PackageLicenseExpression>GPL-3.0-only</PackageLicenseExpression>
+    <MNXVersionPrefix>1.2.0</MNXVersionPrefix>
+    <MNXCounterFile>$(MSBuildThisFileDirectory)BuildNumber.txt</MNXCounterFile>
+    <MNXBuildNumberReserved Condition="'$(MNXBuildNumber)' != ''">true</MNXBuildNumberReserved>
+    <MNXBuildNumber Condition="'$(MNXBuildNumber)' == ''">$([System.IO.File]::ReadAllText('$(MNXCounterFile)').Trim())</MNXBuildNumber>
+    <Version>$(MNXVersionPrefix)-alpha.$(MNXBuildNumber)</Version>
+    <InformationalVersion>$(Version)</InformationalVersion>
+    <AssemblyVersion>$(MNXVersionPrefix).$(MNXBuildNumber)</AssemblyVersion>
+    <FileVersion>$(AssemblyVersion)</FileVersion>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+    <!-- All projects and IDEs share these output locations outside the source tree. -->
+    <MNXBuildRoot Condition="'$(MNXBuildRoot)' == ''">$([MSBuild]::NormalizeDirectory('$(MSBuildThisFileDirectory)', '..', 'mnx_clutter', 'build', 'mnxfile'))</MNXBuildRoot>
+    <MNXReleaseRoot Condition="'$(MNXReleaseRoot)' == ''">$([MSBuild]::NormalizeDirectory('$(MSBuildThisFileDirectory)', '..', 'MNX_Builds', 'mnxfile'))</MNXReleaseRoot>
+    <PublishDir Condition="'$(PublishDir)' == ''">$(MNXReleaseRoot)/$(MSBuildProjectName)/</PublishDir>
+    <BaseOutputPath>$(MNXBuildRoot)/bin/$(MSBuildProjectName)/</BaseOutputPath>
+    <BaseIntermediateOutputPath>$(MNXBuildRoot)/obj/$(MSBuildProjectName)/</BaseIntermediateOutputPath>
+  </PropertyGroup>
+</Project>

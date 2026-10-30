@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Mash.IO.Format.MNX.Native</RootNamespace>
+    <TargetFramework>net10.0</TargetFramework>
+    <!-- Keep Unicode paths and case mapping without an ICU runtime dependency. -->
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <PublishAot>true</PublishAot>
+    <NativeLib>Shared</NativeLib>
+    <AssemblyName>MNXFile.Native</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../MNXFile.csproj" />
+    <Compile Include="../interop/Protocol.cs" Link="Protocol.cs" />
+  </ItemGroup>
+  <ItemGroup Condition="$([System.String]::Copy('$(RuntimeIdentifier)').StartsWith('linux-'))">
+    <LinkerArg Include="-Wl,-soname,libmnxfile.so.1" />
+  </ItemGroup>
+  <!-- Native AOT publishes the DLL but leaves the C import library in the
+       native build directory. Ship it too so Windows C callers can link. -->
+  <Target Name="CopyNativeImportLibrary" AfterTargets="Publish"
+          Condition="'$(OS)' == 'Windows_NT' and '$(NativeLib)' == 'Shared'">
+    <Error Condition="!Exists('$(NativeOutputPath)$(TargetName).lib')"
+           Text="The Windows native import library was not generated." />
+    <Copy SourceFiles="$(NativeOutputPath)$(TargetName).lib"
+          DestinationFolder="$(PublishDir)" />
+  </Target>
+</Project>

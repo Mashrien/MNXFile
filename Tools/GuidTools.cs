@@ -1,71 +1,80 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
+using System.Buffers.Binary;
+using Mash.IO.Format.MNX.Archive.Codecs;
+using Mash.IO.Format.MNX.Archive;
 
-namespace Mash.MSXArchive {
-    public static class GuidTools {
-        public static Guid GuidFromLongs(long a, long b) {
-            byte[] guidData = new byte[16];
-            Array.Copy(BitConverter.GetBytes(a), guidData, 8);
-            Array.Copy(BitConverter.GetBytes(b), 0, guidData, 8, 8);
-            return new Guid(guidData);
-            }
+namespace Mash.IO.Format.MNX.Tools;
 
-        public static (long, long) ToLongs(this Guid guid) {
-            var bytes = guid.ToByteArray();
-            var long1 = BitConverter.ToInt64(bytes, 0);
-            var long2 = BitConverter.ToInt64(bytes, 8);
-            return (long1, long2);
-            }
+/// <summary>Converts GUIDs to fixed-width integer parts using the archive's little-endian byte order.</summary>
+public static class GuidTools {
+    public static Guid GuidFromLongs(long firstPart, long secondPart) {
+        Span<byte> guidBytes = stackalloc byte[16];
+        BinaryPrimitives.WriteInt64LittleEndian(guidBytes, firstPart);
+        BinaryPrimitives.WriteInt64LittleEndian(guidBytes.Slice(8), secondPart);
+        return new Guid(guidBytes);
+        }
 
-        public static Guid GuidFromULongs(ulong a, ulong b) {
-            byte[] guidData = new byte[16];
-            Array.Copy(BitConverter.GetBytes(a), guidData, 8);
-            Array.Copy(BitConverter.GetBytes(b), 0, guidData, 8, 8);
-            return new Guid(guidData);
-            }
+    public static (long FirstPart, long SecondPart) ToLongs(this Guid guid) {
+        Span<byte> guidBytes = stackalloc byte[16];
+        guid.TryWriteBytes(guidBytes);
+        long firstPart = BinaryPrimitives.ReadInt64LittleEndian(guidBytes);
+        long secondPart = BinaryPrimitives.ReadInt64LittleEndian(guidBytes.Slice(8));
+        return (firstPart, secondPart);
+        }
 
-        public static (ulong, ulong) ToULongs(this Guid guid) {
-            var bytes = guid.ToByteArray();
-            var ulong1 = BitConverter.ToUInt64(bytes, 0);
-            var ulong2 = BitConverter.ToUInt64(bytes, 8);
-            return (ulong1, ulong2);
-            }
+    public static Guid GuidFromULongs(ulong firstPart, ulong secondPart) {
+        return GuidFromLongs(unchecked((long)firstPart), unchecked((long)secondPart));
+        }
 
-        public static Guid GuidFromInts(int a, int b, int c, int d) {
-            byte[] guidData = new byte[16];
-            Array.Copy(BitConverter.GetBytes(a), guidData, 4);
-            Array.Copy(BitConverter.GetBytes(b), 0, guidData, 4, 4);
-            Array.Copy(BitConverter.GetBytes(c), 0, guidData, 8, 4);
-            Array.Copy(BitConverter.GetBytes(d), 0, guidData, 12, 4);
-            return new Guid(guidData);
-            }
+    public static (ulong FirstPart, ulong SecondPart) ToULongs(this Guid guid) {
+        (long firstPart, long secondPart) = guid.ToLongs();
+        return (unchecked((ulong)firstPart), unchecked((ulong)secondPart));
+        }
 
-        public static (int, int, int, int) ToInts(this Guid guid) {
-            var bytes = guid.ToByteArray();
-            var a = BitConverter.ToInt32(bytes, 0);
-            var b = BitConverter.ToInt32(bytes, 4);
-            var c = BitConverter.ToInt32(bytes, 8);
-            var d = BitConverter.ToInt32(bytes, 12);
-            return (a, b, c, d);
-            }
+    public static Guid GuidFromInts(int firstPart, int secondPart, int thirdPart, int fourthPart) {
+        Span<byte> guidBytes = stackalloc byte[16];
+        BinaryPrimitives.WriteInt32LittleEndian(guidBytes, firstPart);
+        BinaryPrimitives.WriteInt32LittleEndian(guidBytes.Slice(4), secondPart);
+        BinaryPrimitives.WriteInt32LittleEndian(guidBytes.Slice(8), thirdPart);
+        BinaryPrimitives.WriteInt32LittleEndian(guidBytes.Slice(12), fourthPart);
+        return new Guid(guidBytes);
+        }
 
-        public static Guid GuidFromUInts(uint a, uint b, uint c, uint d) {
-            byte[] guidData = new byte[16];
-            Array.Copy(BitConverter.GetBytes(a), guidData, 4);
-            Array.Copy(BitConverter.GetBytes(b), 0, guidData, 4, 4);
-            Array.Copy(BitConverter.GetBytes(c), 0, guidData, 8, 4);
-            Array.Copy(BitConverter.GetBytes(d), 0, guidData, 12, 4);
-            return new Guid(guidData);
-            }
+    public static (int FirstPart, int SecondPart, int ThirdPart, int FourthPart) ToInts(this Guid guid) {
+        Span<byte> guidBytes = stackalloc byte[16];
+        guid.TryWriteBytes(guidBytes);
+        return (
+            BinaryPrimitives.ReadInt32LittleEndian(guidBytes),
+            BinaryPrimitives.ReadInt32LittleEndian(guidBytes.Slice(4)),
+            BinaryPrimitives.ReadInt32LittleEndian(guidBytes.Slice(8)),
+            BinaryPrimitives.ReadInt32LittleEndian(guidBytes.Slice(12))
+            );
+        }
 
-        public static (uint, uint, uint, uint) ToUInts(this Guid guid) {
-            var bytes = guid.ToByteArray();
-            var a = BitConverter.ToUInt32(bytes, 0);
-            var b = BitConverter.ToUInt32(bytes, 4);
-            var c = BitConverter.ToUInt32(bytes, 8);
-            var d = BitConverter.ToUInt32(bytes, 12);
-            return (a, b, c, d);
-            }
+    public static Guid GuidFromUInts(uint firstPart, uint secondPart, uint thirdPart, uint fourthPart) {
+        return GuidFromInts(
+            unchecked((int)firstPart),
+            unchecked((int)secondPart),
+            unchecked((int)thirdPart),
+            unchecked((int)fourthPart)
+            );
+        }
+
+    public static (uint FirstPart, uint SecondPart, uint ThirdPart, uint FourthPart) ToUInts(this Guid guid) {
+        (int firstPart, int secondPart, int thirdPart, int fourthPart) = guid.ToInts();
+        return (unchecked((uint)firstPart), unchecked((uint)secondPart), unchecked((uint)thirdPart), unchecked((uint)fourthPart));
+        }
+
+    /// <summary>Writes two 64-bit parts: exactly 16 bytes, with no temporary byte array.</summary>
+    public static void WriteGuid(BinaryWriter writer, Guid guid) {
+        (long firstPart, long secondPart) = guid.ToLongs();
+        writer.Write(firstPart);
+        writer.Write(secondPart);
+        }
+
+    /// <summary>Reads the archive's two 64-bit GUID parts without allocating a byte array.</summary>
+    public static Guid ReadGuid(BinaryReader reader) {
+        long firstPart = reader.ReadInt64();
+        long secondPart = reader.ReadInt64();
+        return GuidFromLongs(firstPart, secondPart);
         }
     }

@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="MNXFile.csproj" />
+  <Project Path="native/MNXFile.Native.csproj" />
+  <Project Path="client/MNXFile.Client.csproj" />
+  <Project Path="tests/MNXFile.Smoke/MNXFile.Smoke.csproj" />
+  <Project Path="tests/MNXFile.Client.Smoke/MNXFile.Client.Smoke.csproj" />
+</Solution>
