@@ -227,7 +227,7 @@ Depends: {deb_dependencies(component)}
     run(['dpkg-deb', '--root-owner-group', '-Zxz', '-z9', '--build', stage, output], env=environment)
 
 
-def build_rpm(stage, output_directory, work, config, version, environment):
+def build_rpm(stage, output_directory, work, config, version, environment, release_version):
     component = config['component']
     top = work / 'rpmbuild'
     for directory in ('BUILD', 'BUILDROOT', 'RPMS', 'SOURCES', 'SPECS', 'SRPMS'):
@@ -285,7 +285,7 @@ cp -a "{stage}/." "%{{buildroot}}/"
     packages = list((top / 'RPMS').rglob('*.rpm'))
     if len(packages) != 1:
         raise ValueError(f'Expected one RPM; found {packages}')
-    copy_file(packages[0], output_directory / packages[0].name)
+    copy_file(packages[0], output_directory / f"{config['name']}-{release_version}-1.x86_64.rpm")
 
 
 def main():
@@ -348,12 +348,12 @@ def main():
         portable_archive(root, output / (root.name + '.tar.gz'), epoch)
         deb_stage = work / 'deb-stage'
         stage_package(repository, root, deb_stage, config, 'deb')
-        build_deb(deb_stage, output / f"{config['name']}_{package_version}-1_amd64.deb", config, package_version, environment)
+        build_deb(deb_stage, output / f"{config['name']}_{args.version}-1_amd64.deb", config, package_version, environment)
         rpm_stage = work / 'rpm-stage'
         stage_package(repository, root, rpm_stage, config, 'rpm')
         normalize_times(rpm_stage, epoch)
-        build_rpm(rpm_stage, output, work, config, package_version, environment)
-    assets = [output / (root.name + '.tar.gz'), output / f"{config['name']}_{package_version}-1_amd64.deb", output / f"{config['name']}-{package_version}-1.x86_64.rpm"]
+        build_rpm(rpm_stage, output, work, config, package_version, environment, args.version)
+    assets = [output / (root.name + '.tar.gz'), output / f"{config['name']}_{args.version}-1_amd64.deb", output / f"{config['name']}-{args.version}-1.x86_64.rpm"]
     checksums = []
     for asset in sorted(assets):
         with asset.open('rb') as stream:

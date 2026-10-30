@@ -47,7 +47,9 @@ is generated. Corresponding source must accompany the release through its source
 tag/archive; creating these binary packages does not publish that source.
 
 RPM versions and DEB versions map `1.2.0-alpha.3` to `1.2.0~alpha.3`, with package
-revision 1. Numeric four-part GUI versions are retained. RPM derives ELF native
+revision 1. Download filenames retain `-alpha.N`, avoiding GitHub's renaming of
+`~` characters; package metadata still uses `~alpha.N` for correct version ordering.
+Numeric four-part GUI versions are retained. RPM derives ELF native
 requirements and adds dependencies loaded at runtime. Both formats explicitly
 require glibc >= 2.39 and OpenSSL >= 3, plus engine ABI 1/protocol 1 for clients.
 GUI toolkit requirements accept GTK3 >= 3.24 or GTK4 >= 4.12. NativeAOT needs no
