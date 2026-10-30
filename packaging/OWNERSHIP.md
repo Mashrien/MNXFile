@@ -6,6 +6,6 @@ An RPM runtime package should expose `libmnxfile.so.1()(64bit)` and record the p
 
 The managed NuGet engine and client packages go to `MNX_Builds/mnxfile/packages`; neither is automatically uploaded. The apps pin client version `1.2.0-alpha.3`. Independent package sources can be supplied using `MNXPackageFeed` to the app build scripts.
 
-The project is GPL-3.0-only. Final distribution names/specs, signed metadata and dependency validation on a clean machine remain production package release gates. These notes are not a completed production RPM specification. No installation is performed by the build scripts.
+The project is GPL-3.0-only. Linux release packaging is implemented in `package_linux.py`; see `README.md` for commands and verification. Signed metadata and installation/dependency validation on a clean machine remain separate release gates. No installation is performed by the build scripts.
 
 Linux encryption/hashing uses the platform OpenSSL backend. On Fedora/Nobara, declare openssl-libs explicitly: it is loaded at runtime and may not appear in ELF automatic dependency scanning. Native C runtime/glibc requirements still depend on the build baseline.

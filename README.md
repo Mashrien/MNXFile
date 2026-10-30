@@ -40,6 +40,26 @@ also supplies a full managed library for callers that prefer an in-process engin
 Current disk schema: **MNX7**. It replaces the old MSX prototype; older prototype
 archives are not supported. Controlled cancel/resume is not a power-loss journal.
 
+## Downloads and installation
+
+The [initial releases](https://github.com/Mashrien/MNXFile/releases) provide Linux
+x86-64 RPM/DEB/portable tar packages, a Windows x64 ZIP, and managed engine/client
+NuGet packages. Linux binaries require glibc2.39 or newer and OpenSSL3; Ubuntu24.04
+is the compilation baseline. The native engine needs no installed .NET runtime.
+Install **mnxfile** before the CLI or GUI. Download all required packages first:
+
+```sh
+sudo dnf install ./mnxfile-*.x86_64.rpm ./mnx-cli-*.x86_64.rpm
+# Debian/Ubuntu alternative:
+sudo apt install ./mnxfile_*_amd64.deb ./mnx-cli_*_amd64.deb
+```
+
+On Windows, extract the engine ZIP and run `install-runtime.ps1` in PowerShell;
+then extract either application ZIP. The installer defaults to the current user
+and clients discover its installation automatically. The engine ZIP includes the
+C header/import library. NuGet packages are release downloads, not NuGet.org uploads.
+See [packaging instructions](packaging/README.md) for reproducing packages.
+
 ## Build from source
 
 Requires the **.NET 10 SDK**. Linux Native AOT also needs `clang`, a C toolchain,
@@ -129,7 +149,8 @@ runtime; for example `DESTDIR=/tmp/mnx-stage scripts/install-runtime.sh
 your distribution, and refresh its loader cache after a real installation.
 On Windows, `scripts/install-runtime.ps1 -Library PATH\MNXFile.Native.dll` installs
 per user; `-AllUsers` selects the shared installation. See [package ownership](packaging/OWNERSHIP.md).
-RPM/DEB specifications and binary release publishing are separate from these builds.
+[Packaging scripts](packaging/README.md) turn validated build outputs into release
+archives and RPM/DEB packages; compilation alone does not install them.
 
 ## Source map and format references
 

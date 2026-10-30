@@ -1,0 +1,25 @@
+{
+  "component": "engine",
+  "name": "mnxfile",
+  "summary": "MNXFile native archive engine",
+  "url": "https://github.com/Mashrien/MNXFile",
+  "binaries": [
+    "libmnxfile.so.1"
+  ],
+  "required_notices": {
+    "linux-x64": [
+      "dotnet-LICENSE.txt",
+      "dotnet-ThirdPartyNotices.txt",
+      "Snappier-BSD-3-Clause.txt",
+      "K4os-LZ4-license.txt",
+      "K4os-xxHash-license.txt"
+    ],
+    "win-x64": [
+      "dotnet-LICENSE.txt",
+      "dotnet-ThirdPartyNotices.txt",
+      "Snappier-BSD-3-Clause.txt",
+      "K4os-LZ4-license.txt",
+      "K4os-xxHash-license.txt"
+    ]
+  }
+}
