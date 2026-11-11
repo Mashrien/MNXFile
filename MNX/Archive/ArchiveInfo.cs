@@ -1,6 +1,5 @@
-using ArchiveFile = Mash.IO.Format.MNX.MNX;
 
-namespace Mash.IO.Format.MNX.Archive;
+namespace MNX;
 
 
 /// <summary>A snapshot of archive occupancy and file counts.</summary>

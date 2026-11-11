@@ -1,7 +1,7 @@
 # MNXFile native client
 
 C# bindings for the installed MNXFile shared library, using the existing
-Mash.IO.Format.MNX.MNX API for frontend operations. This package contains no
+MNX.Archive API for frontend operations. This package contains no
 archive format parser, compressor, encryption engine, or native engine binary.
 It requires client protocol 1 from libmnxfile.so.1 on Linux or
 MNXFile.Native.dll on Windows. Install the architecture-matching mnxfile runtime.

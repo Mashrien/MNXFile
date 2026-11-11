@@ -1,9 +1,8 @@
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
-using Mash.IO.Format.MNX.Archive.Codecs;
-using Mash.IO.Format.MNX.Archive;
+using MNX;
 
-namespace Mash.IO.Format.MNX.Chunk;
+namespace MNX.Storage;
 
 internal enum NodeType : byte {
     Free         = 0,

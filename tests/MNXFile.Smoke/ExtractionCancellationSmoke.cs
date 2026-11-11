@@ -1,9 +1,5 @@
-using Mash.IO.Format.MNX.Archive.Codecs;
-using Mash.IO.Format.MNX.Archive;
-using Mash.IO.Format.MNX;
-using ArchiveFile = Mash.IO.Format.MNX.MNX;
+using MNX;
 using DiskFile = System.IO.File;
-using VirtualFile = Mash.IO.Format.MNX.VFile.VFile;
 
 internal static class ExtractionCancellationSmoke {
     internal static void Run(string work) {
@@ -24,12 +20,12 @@ internal static class ExtractionCancellationSmoke {
 
                 ) {
                 string path = Path.Combine(work, $"extract-cancel-{codec}-{encrypted}.mnx");
-                using ArchiveFile archive = new ArchiveFile();
+                using Archive archive = new Archive();
                 archive.Options.Compression = codec;
                 archive.Options.CompressionLevel = codec == ArchiveCompression.Brotli ? 1 : 0;
                 archive.Create(new FileInfo(path), encrypted ? "extraction smoke password" : null);
                 archive.AddStreamNow(new MemoryStream(data), "payload.bin", data.Length);
-                VirtualFile? file = archive.Files.Single();
+                VFile? file = archive.Files.Single();
                 foreach (bool overwrite in new[] {
                     false,
                     true
@@ -68,7 +64,7 @@ internal static class ExtractionCancellationSmoke {
                     Check(!Directory.EnumerateFiles(work, ".mnx-extract-*").Any(), "Temporary extraction output is removed");
                     archive.ExtractFile(file.FileID, new FileInfo(output), overwrite);
                     Check(
-                        DiskFile.ReadAllBytes(output).SequenceEqual(data) && archive.VerifyArchive() == ArchiveFile.ReturnCode.Success,
+                        DiskFile.ReadAllBytes(output).SequenceEqual(data) && archive.VerifyArchive() == Archive.ReturnCode.Success,
                         "A subsequent extraction succeeds without changing archive contents"
                         );
                     }

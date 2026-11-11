@@ -77,16 +77,16 @@ cd MNXFile
 ```
 
 Each script reserves a build number automatically. The library/client version is
-`1.2.0-alpha.N`. **Both applications currently pin client `1.2.0-alpha.3`**, so use
+`1.3.0-alpha.N`. **Both applications currently pin client `1.3.0-alpha.6`**, so use
 this command when preparing their dependency feed:
 
 ```sh
-MNXBuildNumber=3 ./build.sh --test
+MNXBuildNumber=6 ./build.sh --test
 # Managed NuGet packages only, without building the native library:
-MNXBuildNumber=3 ./build.sh --packages-only
+MNXBuildNumber=6 ./build.sh --packages-only
 ```
 
-PowerShell equivalent: `$env:MNXBuildNumber='3'; .\build.ps1 -Test`.
+PowerShell equivalent: `$env:MNXBuildNumber='6'; .\build.ps1 -Test`.
 The package IDs are `Mash.MNXFile` (full managed engine) and
 `Mash.MNXFile.Client` (thin native client). Packages are generated locally; these
 versions have not been published to NuGet.org.
@@ -112,19 +112,23 @@ Choose **one** managed API provider in an application:
 - `Mash.MNXFile.Client`: frontend API and metadata that call the installed native
   library; it embeds neither the engine nor its codecs.
 
-Both expose the master class `Mash.IO.Format.MNX.MNX`. For example:
+Both expose `MNX.Archive` for archive operations and `MNX.VFile` for entry metadata.
 
 ```csharp
 using System.IO;
-using ArchiveFile = Mash.IO.Format.MNX.MNX;
-using Mash.IO.Format.MNX.Archive.Codecs;
+using System.Linq;
+using MNX;
 
-using ArchiveFile archive = new ArchiveFile();
+using Archive archive = new Archive();
 archive.Options.Compression = ArchiveCompression.Snappy;
 archive.Create(new FileInfo("backup.mnx"));
 archive.AddFileNow(new FileInfo("document.txt"));
-ArchiveFile.ReturnCode result = archive.VerifyArchive();
+VFile entry = archive.Files.Single();
+Archive.ReturnCode result = archive.VerifyArchive();
 ```
+
+Optional utilities are grouped under `MNX.Tools`: `xGuid` for GUID conversions,
+`ShortPacking` for byte and nibble packing, and `FileSystem` for link detection.
 
 The C API is in [native/include/mnxfile.h](native/include/mnxfile.h).
 Read the [native interface guide](native/README.md) for ownership, callbacks,
@@ -156,9 +160,9 @@ archives and RPM/DEB packages; compilation alone does not install them.
 
 | Path | Purpose |
 | --- | --- |
-| `MNX/File.cs`, `MNX/Configuration.cs` | Public archive interface and creation options |
+| `MNX/Archive.cs`, `MNX/Configuration.cs` | Public archive interface and creation options |
 | `MNX/Archive/` | Index, storage, queue/resume, codecs and encryption |
-| `MNX/Chunk/`, `MNX/VFile/` | Chunk structures/maps/readers and virtual entries |
+| `MNX/Archive/Chunks/`, `MNX/VFile/` | Chunk structures/maps/readers and virtual entries |
 | `native/`, `interop/` | Native exports, C header and versioned protocol |
 | `client/` | Thin C# native client |
 | `tests/` | Managed, client/protocol and native C smoke tests |

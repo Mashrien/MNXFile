@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <RootNamespace>Mash.IO.Format.MNX.Native</RootNamespace>
+    <RootNamespace>MNX.Native</RootNamespace>
     <TargetFramework>net10.0</TargetFramework>
     <!-- Keep Unicode paths and case mapping without an ICU runtime dependency. -->
     <InvariantGlobalization>true</InvariantGlobalization>

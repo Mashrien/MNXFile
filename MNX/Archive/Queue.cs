@@ -1,16 +1,14 @@
-using Mash.IO.Format.MNX.Archive.Codecs;
-using Mash.IO.Format.MNX.Archive;
-using Mash.IO.Format.MNX.Tools;
-using ArchiveFile = Mash.IO.Format.MNX.MNX;
+using static MNX.Tools.FileSystem;
+using static MNX.Archive;
 using DiskFile = System.IO.File;
 
-namespace Mash.IO.Format.MNX.Archive;
+namespace MNX;
 
 /// <summary>Queue and scan input paths, then write them serially as one index batch.</summary>
 public sealed class ArchiveQueue {
-    private readonly ArchiveFile _owner;
+    private readonly Archive _owner;
     private readonly ArchiveState _state;
-    internal ArchiveQueue(ArchiveFile owner) {
+    internal ArchiveQueue(Archive owner) {
         _owner = owner;
         _state = owner.State;
         }
@@ -23,40 +21,40 @@ public sealed class ArchiveQueue {
             }
         }
 
-    public ArchiveFile.ReturnCode AddFile(FileInfo file, Guid parent = default) {
+    public ReturnCode AddFile(FileInfo file, Guid parent = default) {
         ArgumentNullException.ThrowIfNull(file);
         lock (_state.SyncRoot) {
             _owner.CheckUsable();
-            if (FileSystemTools.IsLink(file)) {
-                return _owner.SetError(ArchiveFile.ReturnCode.Success);
+            if (IsLink(file)) {
+                return _owner.SetError(ReturnCode.Success);
                 }
 
             if (!file.Exists) {
-                return _owner.SetError(ArchiveFile.ReturnCode.Failed | ArchiveFile.ReturnCode.ArchiveNonExistant);
+                return _owner.SetError(ReturnCode.Failed | ReturnCode.ArchiveNonExistant);
                 }
 
             _owner.ValidateInputName(file.Name);
             Guid owner = _owner.NormalizeParent(parent);
             if (_state.QueueItems.Any(item => item.SourcePath == file.FullName && item.Parent == owner)) {
-                return _owner.SetError(ArchiveFile.ReturnCode.Success);
+                return _owner.SetError(ReturnCode.Success);
                 }
 
             _state.QueueItems.Add(new FileQueueItem(file.FullName, file.Name, owner, false));
-            return _owner.SetError(ArchiveFile.ReturnCode.Success);
+            return _owner.SetError(ReturnCode.Success);
             }
         }
 
     /// <summary>Queue a directory and descendants, including empty folders; silently skip links.</summary>
-    public ArchiveFile.ReturnCode AddDirectory(DirectoryInfo directory, Guid parent = default) {
+    public ReturnCode AddDirectory(DirectoryInfo directory, Guid parent = default) {
         ArgumentNullException.ThrowIfNull(directory);
         lock (_state.SyncRoot) {
             _owner.CheckUsable();
-            if (FileSystemTools.IsLink(directory)) {
-                return _owner.SetError(ArchiveFile.ReturnCode.Success);
+            if (IsLink(directory)) {
+                return _owner.SetError(ReturnCode.Success);
                 }
 
             if (!directory.Exists) {
-                return _owner.SetError(ArchiveFile.ReturnCode.Failed | ArchiveFile.ReturnCode.ArchiveNonExistant);
+                return _owner.SetError(ReturnCode.Failed | ReturnCode.ArchiveNonExistant);
                 }
 
             Guid owner = _owner.NormalizeParent(parent);
@@ -69,13 +67,13 @@ public sealed class ArchiveQueue {
                 throw;
                 }
 
-            return _owner.SetError(ArchiveFile.ReturnCode.Success);
+            return _owner.SetError(ReturnCode.Success);
             }
         }
 
     private void QueueDirectoryRecursive(DirectoryInfo directory, Guid parent) {
         _owner.Options.CancellationToken.ThrowIfCancellationRequested();
-        if (FileSystemTools.IsLink(directory)) {
+        if (IsLink(directory)) {
             return;
             }
 
@@ -88,7 +86,7 @@ public sealed class ArchiveQueue {
 
         foreach (FileInfo file in directory.EnumerateFiles().OrderBy(x => x.Name, StringComparer.Ordinal)) {
             _owner.Options.CancellationToken.ThrowIfCancellationRequested();
-            if (FileSystemTools.IsLink(file)) {
+            if (IsLink(file)) {
                 continue;
                 }
 
@@ -98,12 +96,12 @@ public sealed class ArchiveQueue {
         }
 
     /// <summary>Queue paths supplied by any drag and drop UI without depending on UI frameworks.</summary>
-    public Dictionary<string, ArchiveFile.ReturnCode> AddDropList(IEnumerable<string> paths, Guid parent = default) {
+    public Dictionary<string, ReturnCode> AddDropList(IEnumerable<string> paths, Guid parent = default) {
         ArgumentNullException.ThrowIfNull(paths);
-        Dictionary<string, ArchiveFile.ReturnCode> results = new Dictionary<string, ArchiveFile.ReturnCode>(StringComparer.Ordinal);
+        Dictionary<string, ReturnCode> results = new Dictionary<string, ReturnCode>(StringComparer.Ordinal);
         foreach (string path in paths) {
-            if (FileSystemTools.IsLink(new FileInfo(path))) {
-                results[path] = ArchiveFile.ReturnCode.Success;
+            if (IsLink(new FileInfo(path))) {
+                results[path] = ReturnCode.Success;
                 }
             else if (DiskFile.Exists(path)) {
                 results[path] = AddFile(new FileInfo(path), parent);
@@ -112,14 +110,14 @@ public sealed class ArchiveQueue {
                 results[path] = AddDirectory(new DirectoryInfo(path), parent);
                 }
             else {
-                results[path] = ArchiveFile.ReturnCode.Failed | ArchiveFile.ReturnCode.ArchiveNonExistant;
+                results[path] = ReturnCode.Failed | ReturnCode.ArchiveNonExistant;
                 }
             }
 
         return results;
         }
 
-    public ArchiveFile.ReturnCode Remove(Guid id) {
+    public ReturnCode Remove(Guid id) {
         lock (_state.SyncRoot) {
             HashSet<Guid> descendants = new HashSet<Guid> {
                 id
@@ -135,13 +133,13 @@ public sealed class ArchiveQueue {
                 }
             while (changed);
             int removed = _state.QueueItems.RemoveAll(item => descendants.Contains(item.ID));
-            return _owner.SetError(removed == 0 ? ArchiveFile.ReturnCode.Failed | ArchiveFile.ReturnCode.GuidNotFound : ArchiveFile.ReturnCode.Success);
+            return _owner.SetError(removed == 0 ? ReturnCode.Failed | ReturnCode.GuidNotFound : ReturnCode.Success);
             }
         }
 
-    public ArchiveFile.ReturnCode Process() => Process(null);
+    public ReturnCode Process() => Process(null);
     /// <summary>Write queued items in parent-before-child order. Returning true from callback cancels.</summary>
-    public ArchiveFile.ReturnCode Process(Func<int, int, int, string, bool>? callback) {
+    public ReturnCode Process(Func<int, int, int, string, bool>? callback) {
         lock (_state.SyncRoot) {
             _owner.CheckOpen();
             bool ownsBatch = _owner.BeginWriteBatch();
@@ -149,7 +147,7 @@ public sealed class ArchiveQueue {
                 foreach (FileQueueItem item in _state.QueueItems.ToArray()) {
                     _owner.Options.CancellationToken.ThrowIfCancellationRequested();
                     if (callback?.Invoke(0, 1, 0, item.Name) == true) {
-                        return _owner.SetError(ArchiveFile.ReturnCode.Failed | ArchiveFile.ReturnCode.Warning);
+                        return _owner.SetError(ReturnCode.Failed | ReturnCode.Warning);
                         }
 
                     if (item.IsDirectory) {
@@ -161,11 +159,11 @@ public sealed class ArchiveQueue {
 
                     _state.QueueItems.Remove(item);
                     if (callback?.Invoke(0, 1, 1, item.Name) == true) {
-                        return _owner.SetError(ArchiveFile.ReturnCode.Failed | ArchiveFile.ReturnCode.Warning);
+                        return _owner.SetError(ReturnCode.Failed | ReturnCode.Warning);
                         }
                     }
 
-                return _owner.SetError(ArchiveFile.ReturnCode.Success);
+                return _owner.SetError(ReturnCode.Success);
                 }
             finally {
                 _owner.FinishWriteBatch(ownsBatch);

@@ -1,7 +1,6 @@
-using Mash.IO.Format.MNX.Archive;
-using Mash.IO.Format.MNX.Interop;
+using MNX.Interop;
 
-namespace Mash.IO.Format.MNX.Archive.Resume;
+namespace MNX;
 
 /// <summary>Recovery operations are performed by the installed engine.</summary>
 public static class RemainingQueue {

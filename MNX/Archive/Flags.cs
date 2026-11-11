@@ -1,9 +1,7 @@
-using Mash.IO.Format.MNX.Archive.Codecs;
-using Mash.IO.Format.MNX.Archive;
 
-namespace Mash.IO.Format.MNX;
+namespace MNX;
 
-public sealed partial class MNX {
+public sealed partial class Archive {
     [Flags]
     public enum ReturnCode : ulong {
         Success              = 1UL << 0,

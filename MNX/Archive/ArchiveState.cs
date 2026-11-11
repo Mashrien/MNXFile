@@ -1,21 +1,18 @@
-using Mash.IO.Format.MNX.Archive.Codecs;
-using Mash.IO.Format.MNX.Archive;
-using Mash.IO.Format.MNX.Chunk;
-using ArchiveFile = Mash.IO.Format.MNX.MNX;
-using VirtualFile = Mash.IO.Format.MNX.VFile.VFile;
+using MNX.Codecs;
+using MNX.Storage;
 
-namespace Mash.IO.Format.MNX.Archive;
+namespace MNX;
 
 /// <summary>Owned mutable state for one archive. All access is serialized through SyncRoot.</summary>
 internal sealed class ArchiveState {
     internal object SyncRoot { get; } = new();
-    internal Dictionary<Guid, VirtualFile> Entries { get; } = new();
+    internal Dictionary<Guid, VFile> Entries { get; } = new();
     internal List<FileQueueItem> QueueItems { get; } = new();
     internal FreeChunkSet FreeChunks { get; } = new();
     internal Configuration Options { get; } = new();
     internal Guid ArchiveGuid { get; set; }
     internal Guid RootDirectoryId { get; set; }
-    internal ArchiveFile.ReturnCode ErrorStatus { get; set; } = ArchiveFile.ReturnCode.None;
+    internal Archive.ReturnCode ErrorStatus { get; set; } = Archive.ReturnCode.None;
     internal string? Path { get; set; }
     internal uint ChunkCount;
     internal uint IndexChunks { get; set; }

@@ -1,11 +1,7 @@
+using static MNX.Archive;
 using System.Security.Cryptography;
-using Mash.IO.Format.MNX.Archive.Codecs;
-using Mash.IO.Format.MNX.Archive.Resume;
-using Mash.IO.Format.MNX.Archive;
-using Mash.IO.Format.MNX;
-using ArchiveFile = Mash.IO.Format.MNX.MNX;
+using MNX;
 using DiskFile = System.IO.File;
-using VirtualFile = Mash.IO.Format.MNX.VFile.VFile;
 
 internal static class ResumeSmoke {
     internal static void Run(string work) {
@@ -33,7 +29,7 @@ internal static class ResumeSmoke {
                 string path = Path.Combine(work, $"resume-{codec}-{encrypted}.mnx");
                 string? password = encrypted ? "resume-password" : null;
                 string queuePath;
-                using (ArchiveFile archive = new ArchiveFile()) {
+                using (Archive archive = new Archive()) {
                     archive.Options.Compression = codec;
                     archive.Options.CompressionLevel = codec == ArchiveCompression.Brotli ? 2 : 0;
                     archive.Create(new FileInfo(path), password);
@@ -47,7 +43,7 @@ internal static class ResumeSmoke {
                 byte[] originalArchive = DiskFile.ReadAllBytes(path);
                 DateTime originalTime = DiskFile.GetLastWriteTimeUtc(filePath);
                 DiskFile.AppendAllText(filePath, "changed");
-                using (ArchiveFile archive = new ArchiveFile().Open(path, password)) {
+                using (Archive archive = new Archive().Open(path, password)) {
                     bool rejected = false;
                     try {
                         archive.LoadRemainingQueue(new FileInfo(queuePath));
@@ -77,7 +73,7 @@ internal static class ResumeSmoke {
                     }
 
                 Check(badQueue, "Queue payload checksum rejects edited metadata");
-                using (ArchiveFile archive = new ArchiveFile().Open(path, password)) {
+                using (Archive archive = new Archive().Open(path, password)) {
                     archive.AddStreamNow(new MemoryStream([9]), "changed.archive", 1);
                     bool rejected = false;
                     try {
@@ -102,17 +98,17 @@ internal static class ResumeSmoke {
                     RemainingQueue.LocateArchive(new FileInfo(movedQueue), payload) == movedPath,
                     "Queue and archive can move together"
                     );
-                using (ArchiveFile archive = new ArchiveFile().Open(movedPath, password)) {
+                using (Archive archive = new Archive().Open(movedPath, password)) {
                     int level = archive.CompressionLevel;
                     archive.LoadRemainingQueue(new FileInfo(movedQueue));
-                    Check(archive.ProcessAddQueue() == ArchiveFile.ReturnCode.Success, "Remaining entries process successfully");
+                    Check(archive.ProcessAddQueue() == ReturnCode.Success, "Remaining entries process successfully");
                     Check(
                         archive.Compression == codec && archive.CompressionLevel == level && archive.IsEncrypted == encrypted,
                         "Resume inherits stored compression, effort and encryption"
                         );
-                    VirtualFile? file = archive.Files.Single(entry => entry.Name == name);
+                    VFile? file = archive.Files.Single(entry => entry.Name == name);
                     Check(
-                        SHA256.HashData(archive.ReadFileRange(file.FileID, 0, contents.Length)).SequenceEqual(SHA256.HashData(contents)) && archive.Files.Any(entry => entry.Name == "empty" && entry.IsDirectory) && archive.VerifyArchive() == ArchiveFile.ReturnCode.Success,
+                        SHA256.HashData(archive.ReadFileRange(file.FileID, 0, contents.Length)).SequenceEqual(SHA256.HashData(contents)) && archive.Files.Any(entry => entry.Name == "empty" && entry.IsDirectory) && archive.VerifyArchive() == ReturnCode.Success,
                         "Resume preserves names, nested/empty folders and payload bytes"
                         );
                     }

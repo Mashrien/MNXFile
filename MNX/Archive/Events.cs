@@ -1,10 +1,10 @@
-using ArchiveFile = Mash.IO.Format.MNX.MNX;
+using static MNX.Archive;
 
-namespace Mash.IO.Format.MNX.Archive;
+namespace MNX;
 
 
 public sealed class FileOpenedEventArgs : EventArgs {
-    public ArchiveFile.ReturnCode ErrorLevel { get; set; }
+    public ReturnCode ErrorLevel { get; set; }
     public string ErrorMessage { get; set; } = string.Empty;
     public string ExceptionText { get; set; } = string.Empty;
     public bool Cancel { get; set; }
@@ -12,7 +12,7 @@ public sealed class FileOpenedEventArgs : EventArgs {
 
 
 public sealed class OperationProgressArgs : EventArgs {
-    public ArchiveFile.ReturnCode ErrorLevel { get; set; }
+    public ReturnCode ErrorLevel { get; set; }
     public string FileName { get; set; } = string.Empty;
     public float Progress { get; set; }
     public long BytesMin { get; set; }

@@ -1,4 +1,4 @@
-namespace Mash.IO.Format.MNX.Archive.Codecs;
+namespace MNX;
 
 public enum ArchiveCompression : byte {
     None   = 0,

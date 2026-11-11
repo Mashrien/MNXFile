@@ -1,15 +1,15 @@
+using MNX.Tools;
 using System.Buffers.Binary;
 using System.Buffers;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
-using static Mash.IO.Format.MNX.Archive.ArchiveFormat;
-using Mash.IO.Format.MNX.Archive.Codecs;
-using Mash.IO.Format.MNX.Archive;
-using Mash.IO.Format.MNX.Tools;
+using static MNX.ArchiveFormat;
+using MNX.Codecs;
+using MNX;
 
-namespace Mash.IO.Format.MNX.Chunk;
+namespace MNX.Storage;
 
 /// <summary>Reads and writes physical chunks using the fixed packed header and an existing byte buffer.</summary>
 internal static class ChunkFormat {
@@ -113,8 +113,8 @@ internal static class ChunkFormat {
             Flags = raw.Flags,
             NameInIndex = (raw.Flags & NodeFlags.IndexName) != 0,
             WideName = (raw.Flags & NodeFlags.DoubleNameLength) != 0,
-            Id = GuidTools.GuidFromLongs(raw.IdFirst, raw.IdSecond),
-            Parent = GuidTools.GuidFromLongs(raw.ParentFirst, raw.ParentSecond),
+            Id = xGuid.GuidFromLongs(raw.IdFirst, raw.IdSecond),
+            Parent = xGuid.GuidFromLongs(raw.ParentFirst, raw.ParentSecond),
             Next = raw.Next,
             Sequence = raw.Sequence,
             DataLength = raw.DataLength,

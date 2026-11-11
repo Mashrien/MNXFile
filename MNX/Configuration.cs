@@ -1,9 +1,6 @@
 using System.Collections.ObjectModel;
-using Mash.IO.Format.MNX.Archive.Codecs;
-using Mash.IO.Format.MNX.Archive;
-using Mash.IO.Format.MNX.Tools;
 
-namespace Mash.IO.Format.MNX;
+namespace MNX;
 
 /// <summary>Configuration for read and write operations.</summary>
 public sealed class Configuration {

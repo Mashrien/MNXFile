@@ -1,23 +1,19 @@
+using static MNX.Tools.FileSystem;
 using System.Diagnostics;
 using System.Security.Cryptography;
-using Mash.IO.Format.MNX.Archive.Codecs;
-using Mash.IO.Format.MNX.Archive.Resume;
-using Mash.IO.Format.MNX.Archive;
-using Mash.IO.Format.MNX.Chunk;
-using Mash.IO.Format.MNX.Tools;
-using ArchiveFile = Mash.IO.Format.MNX.MNX;
+using MNX.Codecs;
+using MNX.Storage;
 using DiskFile = System.IO.File;
-using DiskNodeFlags = Mash.IO.Format.MNX.Chunk.NodeFlags;
-using VirtualFile = Mash.IO.Format.MNX.VFile.VFile;
+using DiskNodeFlags = MNX.Storage.NodeFlags;
 
-namespace Mash.IO.Format.MNX;
-/// <summary>A seekable MNX archive with a fixed chunk size declared by its header.</summary>
-public sealed partial class MNX : IDisposable {
+namespace MNX;
+/// <summary>A seekable Archive archive with a fixed chunk size declared by its header.</summary>
+public sealed partial class Archive : IDisposable {
     private readonly ArchiveState _state = new();
     internal ArchiveState State => _state;
     public ArchiveQueue Queue { get; }
     public ArchiveRecovery Recovery { get; }
-    public MNX() {
+    public Archive() {
         ArchiveGuid = Guid.NewGuid();
         RootDirectoryId = Guid.NewGuid();
         Queue = new ArchiveQueue(this);
@@ -45,7 +41,7 @@ public sealed partial class MNX : IDisposable {
 
     public IReadOnlyList<FileQueueItem> FileQueue => Queue.Items;
 
-    public IReadOnlyCollection<VirtualFile> Files {
+    public IReadOnlyCollection<VFile> Files {
         get {
             lock (_state.SyncRoot) {
                 return _state.Entries.Values.ToArray();
@@ -75,7 +71,7 @@ public sealed partial class MNX : IDisposable {
     public event EventHandler<FileOpenedEventArgs>? FileOpened;
     public event EventHandler<OperationProgressArgs>? ProgressReport;
     /// <summary>Create a new archive at the given path. Existing files are never overwritten.</summary>
-    public ArchiveFile Create(FileInfo archiveFile, string? password = null) {
+    public Archive Create(FileInfo archiveFile, string? password = null) {
         ArgumentNullException.ThrowIfNull(archiveFile);
         lock (_state.SyncRoot) {
             CheckUsable();
@@ -130,7 +126,7 @@ public sealed partial class MNX : IDisposable {
                     );
                 _state.IndexChunks = _state.ChunkSize == ArchiveFormat.LargeChunkSize ? 1u : ArchiveFormat.InitialIndexChunks;
                 _state.ChunkCount = _state.IndexChunks;
-                byte[] index = ArchiveIndex.Serialize(Array.Empty<VirtualFile>(), _state.FreeChunks);
+                byte[] index = ArchiveIndex.Serialize(Array.Empty<VFile>(), _state.FreeChunks);
                 WriteIndexAndHeader(stream, index);
                 _state.Path = archiveFile.FullName;
                 _state.ResumePassword = password is null ? null : System.Text.Encoding.UTF8.GetBytes(password);
@@ -149,7 +145,7 @@ public sealed partial class MNX : IDisposable {
         }
 
     /// <summary>Open an existing archive by reading only the front index.</summary>
-    public ArchiveFile Open(FileInfo archiveFile, string? password = null) {
+    public Archive Open(FileInfo archiveFile, string? password = null) {
         ArgumentNullException.ThrowIfNull(archiveFile);
         lock (_state.SyncRoot) {
             CheckUsable();
@@ -182,7 +178,7 @@ public sealed partial class MNX : IDisposable {
                     indexData = openedCodec!.DecryptIndex(indexData, header.indexNonce, header.indexTag);
                     }
 
-                (Dictionary<Guid, VirtualFile> entries, FreeChunkSet free) = ArchiveIndex.Deserialize(
+                (Dictionary<Guid, VFile> entries, FreeChunkSet free) = ArchiveIndex.Deserialize(
                     indexData,
                     header.entries,
                     header.indexChunks,
@@ -191,14 +187,14 @@ public sealed partial class MNX : IDisposable {
                     header.chunkSize,
                     header.flags.HasFlag(DiskNodeFlags.Streamed)
                     );
-                foreach (VirtualFile file in entries.Values) {
-                    if (file.OwnerID != header.rootId && (!entries.TryGetValue(file.OwnerID, out VirtualFile? parent) || !parent.IsDirectory)) {
+                foreach (VFile file in entries.Values) {
+                    if (file.OwnerID != header.rootId && (!entries.TryGetValue(file.OwnerID, out VFile? parent) || !parent.IsDirectory)) {
                         throw new InvalidDataException($"Invalid parent directory for {file.Name}.");
                         }
                     }
 
                 // Parent chains must terminate at the archive root.
-                foreach (VirtualFile file in entries.Values) {
+                foreach (VFile file in entries.Values) {
                     HashSet<Guid> ancestors = new HashSet<Guid> {
                         file.FileID
                         };
@@ -225,7 +221,7 @@ public sealed partial class MNX : IDisposable {
                 _state.ResumePassword = password is null ? null : System.Text.Encoding.UTF8.GetBytes(password);
                 openedCodec = null;
                 _state.Entries.Clear();
-                foreach (KeyValuePair<Guid, VirtualFile> item in entries) {
+                foreach (KeyValuePair<Guid, VFile> item in entries) {
                     _state.Entries.Add(item.Key, item.Value);
                     }
 
@@ -258,7 +254,7 @@ public sealed partial class MNX : IDisposable {
             }
         }
 
-    public ArchiveFile Open(string path, string? password = null) => Open(new FileInfo(path), password);
+    public Archive Open(string path, string? password = null) => Open(new FileInfo(path), password);
     /// <summary>Forget the open archive while keeping the queue for a later save.</summary>
     public void Close() {
         lock (_state.SyncRoot) {
@@ -284,7 +280,7 @@ public sealed partial class MNX : IDisposable {
             }
         }
 
-    public VirtualFile GetRootVFile() => new(
+    public VFile GetRootVFile() => new(
         RootDirectoryId,
         Guid.Empty,
         "/",
@@ -296,13 +292,13 @@ public sealed partial class MNX : IDisposable {
         0,
         0
         );
-    public VirtualFile? GetFile(Guid id) {
+    public VFile? GetFile(Guid id) {
         lock (_state.SyncRoot) {
             return _state.Entries.GetValueOrDefault(id);
             }
         }
 
-    public IReadOnlyList<VirtualFile> DirectoryList(Guid parent = default) {
+    public IReadOnlyList<VFile> DirectoryList(Guid parent = default) {
         lock (_state.SyncRoot) {
             Guid owner = parent == Guid.Empty ? RootDirectoryId : parent;
             RequireDirectory(owner);
@@ -346,7 +342,7 @@ public sealed partial class MNX : IDisposable {
         ArgumentNullException.ThrowIfNull(file);
         lock (_state.SyncRoot) {
             CheckOpen();
-            if (FileSystemTools.IsLink(file)) {
+            if (IsLink(file)) {
                 return SetError(ReturnCode.Success);
                 }
 
@@ -438,7 +434,7 @@ public sealed partial class MNX : IDisposable {
                 _state.Codec,
                 chunkSize: _state.ChunkSize
                 );
-            VirtualFile? file = FromSource(item.ID, item.Parent, item.Name, source, true, 0, index);
+            VFile? file = FromSource(item.ID, item.Parent, item.Name, source, true, 0, index);
             file.AppendLogicalLength(0);
             AddEntry(file);
             Commit(archive);
@@ -478,7 +474,7 @@ public sealed partial class MNX : IDisposable {
             }
 
         using FileStream archive = OpenWrite();
-        VirtualFile? writtenFile = null;
+        VFile? writtenFile = null;
         uint pendingIndex = 0;
         uint nextAllocated = 0;
         byte[] buffer = new byte[Compression != ArchiveCompression.None ? 65536 : _state.ChunkSize - ArchiveFormat.NextHeaderSize];
@@ -627,7 +623,7 @@ public sealed partial class MNX : IDisposable {
 
         lock (_state.SyncRoot) {
             CheckOpen();
-            VirtualFile? file = RequireFile(id);
+            VFile? file = RequireFile(id);
             if (UsesStreamCompression) {
                 if ((ulong)offset >= file.SizeOriginal || count == 0) {
                     return Array.Empty<byte>();
@@ -646,7 +642,7 @@ public sealed partial class MNX : IDisposable {
             }
         }
 
-    private byte[] ReadFileRangeCore(Stream archive, VirtualFile file, long offset, int count) {
+    private byte[] ReadFileRangeCore(Stream archive, VFile file, long offset, int count) {
         if ((ulong)offset >= file.SizeOriginal || count == 0) {
             return Array.Empty<byte>();
             }
@@ -689,7 +685,7 @@ public sealed partial class MNX : IDisposable {
     public byte[] GetFileChunk(Guid id, uint sequence) {
         lock (_state.SyncRoot) {
             CheckOpen();
-            VirtualFile? file = RequireFile(id);
+            VFile? file = RequireFile(id);
             uint index = file.PhysicalChunk(sequence);
             using FileStream archive = DiskFile.OpenRead(_state.Path!);
             byte[] payload = ChunkFormat.ReadChunk(
@@ -723,7 +719,7 @@ public sealed partial class MNX : IDisposable {
 
                 long checkedBytes = 0;
                 Stopwatch? progressTimer = Stopwatch.StartNew();
-                foreach (VirtualFile file in _state.Entries.Values) {
+                foreach (VFile file in _state.Entries.Values) {
                     ulong size = 0;
                     for (uint sequence = 0; sequence < file.ChunkCount; sequence++) {
                         uint index = file.PhysicalChunk(sequence);
@@ -786,7 +782,7 @@ public sealed partial class MNX : IDisposable {
     public Stream OpenRead(Guid id) {
         lock (_state.SyncRoot) {
             CheckOpen();
-            VirtualFile? file = RequireFile(id);
+            VFile? file = RequireFile(id);
             return UsesStreamCompression ? new ContinuousArchiveReadStream(this, file) : new ArchiveReadStream(this, file);
             }
         }
@@ -837,7 +833,7 @@ public sealed partial class MNX : IDisposable {
     public ReturnCode ExtractFile(Guid id, FileInfo destination, bool? overwrite = null) {
         ArgumentNullException.ThrowIfNull(destination);
         lock (_state.SyncRoot) {
-            VirtualFile? file = RequireFile(id);
+            VFile? file = RequireFile(id);
             StringComparison comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
             if (string.Equals(destination.FullName, _state.Path, comparison)) {
                 throw new InvalidOperationException("The extraction destination cannot be the archive itself.");
@@ -889,7 +885,7 @@ public sealed partial class MNX : IDisposable {
         lock (_state.SyncRoot) {
             RequireDirectory(id);
             destination.Create();
-            foreach (VirtualFile child in DirectoryList(id)) {
+            foreach (VFile child in DirectoryList(id)) {
                 ValidateDestinationName(child.Name);
                 string path = Path.Combine(destination.FullName, child.Name);
                 if (child.IsDirectory) {
@@ -920,11 +916,11 @@ public sealed partial class MNX : IDisposable {
         }
 
     private void DeleteRecursive(Guid id, Stream archive) {
-        foreach (VirtualFile child in _state.Entries.Values.Where(f => f.OwnerID == id).ToArray()) {
+        foreach (VFile child in _state.Entries.Values.Where(f => f.OwnerID == id).ToArray()) {
             DeleteRecursive(child.FileID, archive);
             }
 
-        VirtualFile? file = _state.Entries[id];
+        VFile? file = _state.Entries[id];
         foreach (ChunkExtent extent in file.ChunkExtents) {
             _state.FreeChunks.AddRange(extent.FirstChunk, extent.Count);
             }
@@ -941,7 +937,7 @@ public sealed partial class MNX : IDisposable {
             while (_state.FreeChunks.Count > 0) {
                 uint hole = _state.FreeChunks.Min;
                 uint runLength = _state.FreeChunks.FirstRunLength;
-                VirtualFile? candidate = _state.Entries.Values.Where(f => f.ChunkExtents.Count == 1 && f.ChunkCount <= runLength && f.ChunkExtents[0].FirstChunk > (ulong)hole + runLength - 1).OrderByDescending(f => f.ChunkCount).ThenByDescending(f => f.FirstChunk).FirstOrDefault();
+                VFile? candidate = _state.Entries.Values.Where(f => f.ChunkExtents.Count == 1 && f.ChunkCount <= runLength && f.ChunkExtents[0].FirstChunk > (ulong)hole + runLength - 1).OrderByDescending(f => f.ChunkCount).ThenByDescending(f => f.FirstChunk).FirstOrDefault();
                 if (candidate is not null) {
                     MoveWholeFile(archive, candidate, hole);
                     continue;
@@ -962,7 +958,7 @@ public sealed partial class MNX : IDisposable {
                 ChunkHeader moved = ChunkFormat.ReadSlot(archive, tail, _state.ChunkSize) ?? throw new InvalidDataException("Compaction found an empty source chunk.");
                 archive.Position = (long)hole * _state.ChunkSize;
                 archive.Write(raw);
-                VirtualFile? file = _state.Entries[moved.Id];
+                VFile? file = _state.Entries[moved.Id];
                 if (file.PhysicalChunk(moved.Sequence) != tail) {
                     throw new InvalidDataException("Moved chunk is missing from its file index.");
                     }
@@ -988,7 +984,7 @@ public sealed partial class MNX : IDisposable {
             }
         }
 
-    private void MoveWholeFile(Stream archive, VirtualFile file, uint destination) {
+    private void MoveWholeFile(Stream archive, VFile file, uint destination) {
         uint source = file.ChunkExtents[0].FirstChunk;
         uint count = file.ChunkCount;
         byte[] raw = new byte[_state.ChunkSize];
@@ -1021,7 +1017,7 @@ public sealed partial class MNX : IDisposable {
         }
 
     private void ReplaceIfNeeded(Guid parent, string name) {
-        VirtualFile? existing;
+        VFile? existing;
         if (_state.CurrentBatch is not null) {
             existing = _state.CurrentBatch.Names.TryGetValue((parent, name), out Guid id) ? _state.Entries[id] : null;
             }
@@ -1092,13 +1088,13 @@ public sealed partial class MNX : IDisposable {
         return result;
         }
 
-    private int LogicalChunkLength(VirtualFile file, uint sequence) {
+    private int LogicalChunkLength(VFile file, uint sequence) {
         return file.LogicalLength(sequence);
         }
 
-    private static VirtualFile FromSource(Guid id, Guid parent, string name, FileSystemInfo source, bool directory, ulong size, uint first) => FromMetadata(id, parent, name, SourceMetadata(source), directory, size, first);
-    internal static VirtualFile FromMetadata(Guid id, Guid parent, string name, EntryMetadata metadata, bool directory, ulong size, uint first) {
-        VirtualFile file = new VirtualFile(
+    private static VFile FromSource(Guid id, Guid parent, string name, FileSystemInfo source, bool directory, ulong size, uint first) => FromMetadata(id, parent, name, SourceMetadata(source), directory, size, first);
+    internal static VFile FromMetadata(Guid id, Guid parent, string name, EntryMetadata metadata, bool directory, ulong size, uint first) {
+        VFile file = new VFile(
             id,
             parent,
             name,
@@ -1147,13 +1143,13 @@ public sealed partial class MNX : IDisposable {
         _state.CurrentBatch?.Reset(_state.Entries.Values);
         }
 
-    internal void AddEntry(VirtualFile entry) {
+    internal void AddEntry(VFile entry) {
         _state.Entries.Add(entry.FileID, entry);
         _state.CurrentBatch?.Add(entry);
         }
 
     internal void RemoveEntry(Guid id) {
-        if (_state.Entries.Remove(id, out VirtualFile? entry)) {
+        if (_state.Entries.Remove(id, out VFile? entry)) {
             _state.CurrentBatch?.Remove(entry);
             }
         }
@@ -1222,7 +1218,7 @@ public sealed partial class MNX : IDisposable {
                 }
 
             ChunkHeader slot = ChunkFormat.ReadSlot(archive, index, _state.ChunkSize) ?? throw new InvalidDataException($"Index expansion found an untracked free chunk at {index}.");
-            VirtualFile? file = _state.Entries[slot.Id];
+            VFile? file = _state.Entries[slot.Id];
             if (file.PhysicalChunk(slot.Sequence) != index) {
                 throw new InvalidDataException("Index expansion cannot locate a data chunk.");
                 }
@@ -1256,7 +1252,7 @@ public sealed partial class MNX : IDisposable {
 
     internal void CheckUsable() {
         if (_state.Disposed) {
-            throw new ObjectDisposedException(nameof(ArchiveFile));
+            throw new ObjectDisposedException(nameof(Archive));
             }
         }
 
@@ -1277,13 +1273,13 @@ public sealed partial class MNX : IDisposable {
         }
 
     private void RequireDirectory(Guid id) {
-        if (id != RootDirectoryId && (!_state.Entries.TryGetValue(id, out VirtualFile? file) || !file.IsDirectory)) {
+        if (id != RootDirectoryId && (!_state.Entries.TryGetValue(id, out VFile? file) || !file.IsDirectory)) {
             throw new DirectoryNotFoundException($"Directory {id} was not found in this archive.");
             }
         }
 
-    private VirtualFile RequireFile(Guid id) {
-        if (!_state.Entries.TryGetValue(id, out VirtualFile? file) || file.IsDirectory) {
+    private VFile RequireFile(Guid id) {
+        if (!_state.Entries.TryGetValue(id, out VFile? file) || file.IsDirectory) {
             throw new FileNotFoundException($"File {id} was not found in this archive.");
             }
 

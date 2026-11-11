@@ -1,17 +1,13 @@
 using System.Diagnostics;
 using System.Security.Cryptography;
-using Mash.IO.Format.MNX.Archive.Codecs;
-using Mash.IO.Format.MNX.Archive;
-using Mash.IO.Format.MNX.Chunk;
-using Mash.IO.Format.MNX.Tools;
-using ArchiveFile = Mash.IO.Format.MNX.MNX;
+using MNX;
+using MNX.Storage;
 using DiskFile = System.IO.File;
-using DiskNodeFlags = Mash.IO.Format.MNX.Chunk.NodeFlags;
-using VirtualFile = Mash.IO.Format.MNX.VFile.VFile;
+using DiskNodeFlags = MNX.Storage.NodeFlags;
 
-namespace Mash.IO.Format.MNX.Chunk;
+namespace MNX.Storage;
 
-internal sealed class ArchiveReadStream(ArchiveFile archive, VirtualFile file) : Stream {
+internal sealed class ArchiveReadStream(Archive archive, VFile file) : Stream {
     private long _position;
     private uint? _cachedSequence;
     private byte[] _cachedPayload = Array.Empty<byte>();
@@ -36,7 +32,7 @@ internal sealed class ArchiveReadStream(ArchiveFile archive, VirtualFile file) :
     public override int Read(Span<byte> destination) {
         lock (archive.State.SyncRoot) {
             archive.CheckOpen();
-            if (!archive.State.Entries.TryGetValue(file.FileID, out VirtualFile? current) || !ReferenceEquals(current, file)) {
+            if (!archive.State.Entries.TryGetValue(file.FileID, out VFile? current) || !ReferenceEquals(current, file)) {
                 throw new InvalidOperationException("The archived file changed while this stream was open.");
                 }
 

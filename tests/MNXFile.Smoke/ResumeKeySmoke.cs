@@ -1,12 +1,9 @@
+using static MNX.Archive;
 using System.Buffers.Binary;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
-using Mash.IO.Format.MNX.Archive.Codecs;
-using Mash.IO.Format.MNX.Archive.Resume;
-using Mash.IO.Format.MNX.Archive;
-using Mash.IO.Format.MNX;
-using ArchiveFile = Mash.IO.Format.MNX.MNX;
+using MNX;
 using DiskFile = System.IO.File;
 
 internal static class ResumeKeySmoke {
@@ -20,7 +17,7 @@ internal static class ResumeKeySmoke {
         DiskFile.WriteAllText(second, "Second resumed payload");
         const string password = "A long é🐈 password that is never written literally";
         string queuePath;
-        using (ArchiveFile archive = new ArchiveFile()) {
+        using (Archive archive = new Archive()) {
             archive.Options.Compression = ArchiveCompression.LZ4;
             archive.Create(new FileInfo(path), password);
             archive.Queue_AddFile(new FileInfo(first));
@@ -104,7 +101,7 @@ internal static class ResumeKeySmoke {
             );
         DiskFile.WriteAllBytes(queuePath, queueBytes);
         Reject(() => RemainingQueue.MarkCompleted(queue), "Completion refuses to leave an unconsumed key");
-        using (ArchiveFile archive = new ArchiveFile().Open(path, ResumePassword.Read(queue, path))) {
+        using (Archive archive = new Archive().Open(path, ResumePassword.Read(queue, path))) {
             Reject(() => archive.ConsumeResumeKey(queue), "Key cannot be consumed before source preflight");
             DateTime time = DiskFile.GetLastWriteTimeUtc(second);
             DiskFile.AppendAllText(second, "changed");
@@ -156,11 +153,11 @@ internal static class ResumeKeySmoke {
         DiskFile.Move(queuePath, movedQueue);
         DiskFile.Move(keyPath, movedKey);
         FileInfo movedQueueFile = new FileInfo(movedQueue);
-        using (ArchiveFile archive = new ArchiveFile().Open(movedArchive, ResumePassword.Read(movedQueueFile, movedArchive))) {
+        using (Archive archive = new Archive().Open(movedArchive, ResumePassword.Read(movedQueueFile, movedArchive))) {
             archive.LoadRemainingQueue(movedQueueFile);
             archive.ConsumeResumeKey(movedQueueFile);
             Check(
-                archive.ProcessAddQueue() == ArchiveFile.ReturnCode.Success && archive.VerifyArchive() == ArchiveFile.ReturnCode.Success && archive.IsEncrypted && archive.Compression == ArchiveCompression.LZ4 && archive.Files.Count == 2,
+                archive.ProcessAddQueue() == ReturnCode.Success && archive.VerifyArchive() == ReturnCode.Success && archive.IsEncrypted && archive.Compression == ArchiveCompression.LZ4 && archive.Files.Count == 2,
                 "Moved recovery trio resumes with the original encryption and codec"
                 );
             string third = Path.Combine(folder, "third.input.txt");

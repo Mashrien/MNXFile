@@ -1,12 +1,10 @@
+using MNX.Tools;
 using System.Buffers.Binary;
 using System.Security.Cryptography;
 using System.Text;
-using Mash.IO.Format.MNX.Archive.Codecs;
-using Mash.IO.Format.MNX.Archive;
-using Mash.IO.Format.MNX.Tools;
-using DiskNodeFlags = Mash.IO.Format.MNX.Chunk.NodeFlags;
+using DiskNodeFlags = MNX.Storage.NodeFlags;
 
-namespace Mash.IO.Format.MNX.Archive;
+namespace MNX;
 
 /// <summary>The MNX disk layout. Each archive declares its fixed physical chunk size.</summary>
 internal static class ArchiveFormat {
@@ -91,8 +89,8 @@ internal static class ArchiveFormat {
             writer.Write(version);
             writer.Write((ushort)chunkSize);
             writer.Write(chunkSize);
-            GuidTools.WriteGuid(writer, archiveId);
-            GuidTools.WriteGuid(writer, rootId);
+            xGuid.WriteGuid(writer, archiveId);
+            xGuid.WriteGuid(writer, rootId);
             writer.Write(ShortPacking.PackBytes((byte)flags, 0));
             writer.Write(ShortPacking.PackBytes((byte)compression, checked((byte)compressionLevel)));
             writer.Write(chunks);
@@ -153,8 +151,8 @@ internal static class ArchiveFormat {
             throw new InvalidDataException("Archive length is not aligned to its chunk size.");
             }
 
-        Guid archiveId = GuidTools.ReadGuid(reader);
-        Guid rootId = GuidTools.ReadGuid(reader);
+        Guid archiveId = xGuid.ReadGuid(reader);
+        Guid rootId = xGuid.ReadGuid(reader);
         if (archiveId == Guid.Empty || rootId == Guid.Empty) {
             throw new InvalidDataException("Archive identifiers are missing.");
             }

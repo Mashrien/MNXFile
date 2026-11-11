@@ -1,11 +1,7 @@
 using System.Collections.ObjectModel;
-using Mash.IO.Format.MNX.Archive.Codecs;
-using Mash.IO.Format.MNX.Archive;
-using Mash.IO.Format.MNX.Chunk;
-using Mash.IO.Format.MNX.Tools;
-using ArchiveFile = Mash.IO.Format.MNX.MNX;
+using MNX.Storage;
 
-namespace Mash.IO.Format.MNX.Archive;
+namespace MNX;
 
 
 /// <summary>A source file or directory waiting to be written.</summary>
@@ -26,8 +22,8 @@ public sealed class FileQueueItem {
     public bool IsDirectory { get; }
     public ulong Length => IsDirectory ? 0 : (ulong)new FileInfo(SourcePath).Length;
 
-    public ArchiveFile.ReturnCode ChangeOwnerGuid(Guid parent) {
+    public Archive.ReturnCode ChangeOwnerGuid(Guid parent) {
         Parent = parent;
-        return ArchiveFile.ReturnCode.Success;
+        return Archive.ReturnCode.Success;
         }
     }

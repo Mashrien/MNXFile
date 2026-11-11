@@ -1,8 +1,5 @@
-using Mash.IO.Format.MNX.Archive.Codecs;
-using Mash.IO.Format.MNX.Archive;
-using Mash.IO.Format.MNX;
-using ArchiveFile = Mash.IO.Format.MNX.MNX;
-using VirtualFile = Mash.IO.Format.MNX.VFile.VFile;
+using static MNX.Archive;
+using MNX;
 
 internal static class CancellationSmoke {
     internal static void Run(string work) {
@@ -22,7 +19,7 @@ internal static class CancellationSmoke {
                 ) {
                 string path = Path.Combine(work, $"cancel-{codec}-{encrypted}.mnx");
                 string? password = encrypted ? "cancel-test" : null;
-                using (ArchiveFile archive = new ArchiveFile()) {
+                using (Archive archive = new Archive()) {
                     archive.Options.Compression = codec;
                     archive.Create(new FileInfo(path), password);
                     archive.AddStreamNow(new MemoryStream([4, 5, 6]), "completed.txt", 3);
@@ -40,18 +37,18 @@ internal static class CancellationSmoke {
                     archive.Options.CancellationToken = default;
                     Check(cancelled && input.Position < input.Length, "Cancel stops before all input is read");
                     Check(
-                        archive.Files.Count == 1 && archive.VerifyArchive() == ArchiveFile.ReturnCode.Success,
+                        archive.Files.Count == 1 && archive.VerifyArchive() == ReturnCode.Success,
                         "Current file rolls back and previous file remains valid"
                         );
                     archive.AddStreamNow(new MemoryStream([7]), "after-cancel.txt", 1);
                     }
 
-                using ArchiveFile reopened = new ArchiveFile().Open(path, password);
+                using Archive reopened = new Archive().Open(path, password);
                 Check(
-                    reopened.Files.Count == 2 && reopened.VerifyArchive() == ArchiveFile.ReturnCode.Success,
+                    reopened.Files.Count == 2 && reopened.VerifyArchive() == ReturnCode.Success,
                     "Cancelled archive reopens and accepts subsequent work"
                     );
-                VirtualFile? file = reopened.Files.Single(entry => entry.Name == "completed.txt");
+                VFile? file = reopened.Files.Single(entry => entry.Name == "completed.txt");
                 Check(
                     reopened.ReadFileRange(file.FileID, 0, 3).SequenceEqual(new byte[] { 4, 5, 6 }),
                     "Completed file bytes survive cancellation"

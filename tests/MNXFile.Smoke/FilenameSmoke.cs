@@ -1,9 +1,5 @@
-using Mash.IO.Format.MNX.Archive.Codecs;
-using Mash.IO.Format.MNX.Archive;
-using Mash.IO.Format.MNX;
-using ArchiveFile = Mash.IO.Format.MNX.MNX;
+using MNX;
 using DiskFile = System.IO.File;
-using VirtualFile = Mash.IO.Format.MNX.VFile.VFile;
 
 internal static class FilenameSmoke {
     internal static void Run(string work) {
@@ -35,18 +31,18 @@ internal static class FilenameSmoke {
             ) {
             string archivePath = Path.Combine(work, "names-" + encrypted + ".mnx");
             string? password = encrypted ? "name-test" : null;
-            using (ArchiveFile archive = new ArchiveFile()) {
+            using (Archive archive = new Archive()) {
                 archive.Options.Compression = ArchiveCompression.Snappy;
                 archive.Create(new FileInfo(archivePath), password);
                 archive.AddDirectoryNow(new DirectoryInfo(source));
                 archive.CompactArchive();
-                if (archive.VerifyArchive() != ArchiveFile.ReturnCode.Success) {
+                if (archive.VerifyArchive() != Archive.ReturnCode.Success) {
                     throw new InvalidOperationException("Filename archive failed verification.");
                     }
                 }
 
-            using (ArchiveFile archive = new ArchiveFile().Open(archivePath, password)) {
-                VirtualFile? folder = archive.DirectoryList().Single();
+            using (Archive archive = new Archive().Open(archivePath, password)) {
+                VFile? folder = archive.DirectoryList().Single();
                 string output = Path.Combine(work, "name-output-" + encrypted);
                 archive.ExtractDirectory(folder.FileID, new DirectoryInfo(output));
                 for (int i = 0; i < names.Count; i++) {
@@ -60,7 +56,7 @@ internal static class FilenameSmoke {
                 archive.AddStreamNow(new MemoryStream([1, 2, 3]), wide, 3);
                 }
 
-            using (ArchiveFile archive = new ArchiveFile().Open(archivePath, password)) {
+            using (Archive archive = new Archive().Open(archivePath, password)) {
                 if (!archive.Files.Any(file => file.Name == new string ('界', 250) + ".txt")) {
                     throw new InvalidOperationException("Wide Unicode name did not round-trip.");
                     }

@@ -1,11 +1,10 @@
+using MNX.Tools;
 using System.Buffers.Binary;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
-using Mash.IO.Format.MNX.Archive.Codecs;
-using Mash.IO.Format.MNX.Archive;
-using Mash.IO.Format.MNX.Chunk;
-using Mash.IO.Format.MNX.Tools;
+using MNX;
+using MNX.Storage;
 
 internal static class StorageLayoutSmoke {
     internal static void Run() {
@@ -45,23 +44,23 @@ internal static class StorageLayoutSmoke {
         (ulong firstULong, ulong secondULong) = original.ToULongs();
         (int firstInt, int secondInt, int thirdInt, int fourthInt) = original.ToInts();
         (uint firstUInt, uint secondUInt, uint thirdUInt, uint fourthUInt) = original.ToUInts();
-        if (GuidTools.GuidFromLongs(firstLong, secondLong) != original ||
-            GuidTools.GuidFromULongs(firstULong, secondULong) != original ||
-            GuidTools.GuidFromInts(firstInt, secondInt, thirdInt, fourthInt) != original ||
-            GuidTools.GuidFromUInts(firstUInt, secondUInt, thirdUInt, fourthUInt) != original) {
+        if (xGuid.GuidFromLongs(firstLong, secondLong) != original ||
+            xGuid.GuidFromULongs(firstULong, secondULong) != original ||
+            xGuid.GuidFromInts(firstInt, secondInt, thirdInt, fourthInt) != original ||
+            xGuid.GuidFromUInts(firstUInt, secondUInt, thirdUInt, fourthUInt) != original) {
             throw new InvalidOperationException("GUID integer conversions changed the identifier.");
             }
 
         using MemoryStream guidStream = new MemoryStream();
         using BinaryWriter guidWriter = new BinaryWriter(guidStream, System.Text.Encoding.UTF8, leaveOpen: true);
-        GuidTools.WriteGuid(guidWriter, original);
+        xGuid.WriteGuid(guidWriter, original);
         if (!guidStream.ToArray().AsSpan().SequenceEqual(original.ToByteArray())) {
             throw new InvalidOperationException("GUID disk order changed.");
             }
 
         guidStream.Position = 0;
         using BinaryReader guidReader = new BinaryReader(guidStream, System.Text.Encoding.UTF8, leaveOpen: true);
-        if (GuidTools.ReadGuid(guidReader) != original || guidStream.Position != 16) {
+        if (xGuid.ReadGuid(guidReader) != original || guidStream.Position != 16) {
             throw new InvalidOperationException("GUID reader did not consume exactly 16 bytes.");
             }
 

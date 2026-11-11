@@ -1,7 +1,4 @@
-using Mash.IO.Format.MNX.Archive.Codecs;
-using Mash.IO.Format.MNX.Archive;
-
-namespace Mash.IO.Format.MNX.Tools;
+namespace MNX.Tools;
 
 /// <summary>Two full bytes or four four-bit values packed into the same 16-bit storage.</summary>
 public static class ShortPacking {

@@ -1,21 +1,18 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.ExceptionServices;
 using System.Runtime.InteropServices;
-using Mash.IO.Format.MNX.Archive;
-using Mash.IO.Format.MNX.Archive.Codecs;
-using Mash.IO.Format.MNX.Interop;
-using VirtualFile = Mash.IO.Format.MNX.VFile.VFile;
+using MNX.Interop;
 
-namespace Mash.IO.Format.MNX;
+namespace MNX;
 
 /// <summary>Thin native client. The installed MNXFile library owns archive processing.</summary>
-public sealed unsafe partial class MNX : IDisposable {
+public sealed unsafe partial class Archive : IDisposable {
     private readonly object _gate = new object();
     private ulong _handle;
     private bool _disposed;
     private bool _opened;
     private ClientResponse? _info;
-    private IReadOnlyCollection<VirtualFile>? _files;
+    private IReadOnlyCollection<VFile>? _files;
     private IReadOnlyList<FileQueueItem>? _queue;
     public Configuration Options { get; } = new Configuration();
     public ReturnCode ErrorStatus { get; private set; } = ReturnCode.None;
@@ -33,13 +30,13 @@ public sealed unsafe partial class MNX : IDisposable {
     public event EventHandler<OperationProgressArgs>? ProgressReport;
     private ClientResponse Info => _info ??= Call(new ClientRequest { Operation = "info" });
 
-    public IReadOnlyCollection<VirtualFile> Files {
+    public IReadOnlyCollection<VFile> Files {
         get {
             lock (_gate) {
                 if (!IsOpen) {
-                    return Array.Empty<VirtualFile>();
+                    return Array.Empty<VFile>();
                     }
-                return _files ??= Array.AsReadOnly(Call(new ClientRequest { Operation = "files" }).Entries.Select(entry => new VirtualFile(entry)).ToArray());
+                return _files ??= Array.AsReadOnly(Call(new ClientRequest { Operation = "files" }).Entries.Select(entry => new VFile(entry)).ToArray());
                 }
             }
         }
@@ -55,16 +52,16 @@ public sealed unsafe partial class MNX : IDisposable {
             }
         }
 
-    public MNX Create(FileInfo archiveFile, string? password = null) {
+    public Archive Create(FileInfo archiveFile, string? password = null) {
         return OpenOrCreate(archiveFile.FullName, password, true);
         }
-    public MNX Open(FileInfo archiveFile, string? password = null) {
+    public Archive Open(FileInfo archiveFile, string? password = null) {
         return OpenOrCreate(archiveFile.FullName, password, false);
         }
-    public MNX Open(string path, string? password = null) {
+    public Archive Open(string path, string? password = null) {
         return OpenOrCreate(path, password, false);
         }
-    private MNX OpenOrCreate(string path, string? password, bool create) {
+    private Archive OpenOrCreate(string path, string? password, bool create) {
         lock (_gate) {
             ObjectDisposedException.ThrowIf(_disposed, this);
             if (IsOpen) {
@@ -99,10 +96,10 @@ public sealed unsafe partial class MNX : IDisposable {
             );
         }
 
-    public VirtualFile? GetFile(Guid id) {
+    public VFile? GetFile(Guid id) {
         return Files.FirstOrDefault(entry => entry.FileID == id);
         }
-    public IReadOnlyList<VirtualFile> DirectoryList(Guid parent = default) {
+    public IReadOnlyList<VFile> DirectoryList(Guid parent = default) {
         Guid owner = parent == Guid.Empty ? RootDirectoryId : parent;
         if (owner != RootDirectoryId && GetFile(owner)?.IsDirectory != true) {
             throw new DirectoryNotFoundException("Archive directory was not found.");
@@ -180,8 +177,8 @@ public sealed unsafe partial class MNX : IDisposable {
         _queue = null;
         }
 
-    private sealed class CallbackState(MNX owner, Func<int, int, int, string, bool>? boundary) {
-        internal readonly MNX Owner = owner;
+    private sealed class CallbackState(Archive owner, Func<int, int, int, string, bool>? boundary) {
+        internal readonly Archive Owner = owner;
         internal readonly Func<int, int, int, string, bool>? Boundary = boundary;
         internal ExceptionDispatchInfo? Error;
         internal Stream? Source;

@@ -19,7 +19,9 @@
     <Compile Include="../MNX/Archive/ArchiveInfo.cs" Link="Models/ArchiveInfo.cs" />
     <Compile Include="../MNX/Archive/Resume/Models.cs" Link="Models/Resume.cs" />
     <Compile Include="../MNX/Archive/Codecs/Options.cs" Link="Models/CompressionOptions.cs" />
-    <Compile Include="../Tools/FileSystemTools.cs" Link="Tools/FileSystemTools.cs" />
+    <Compile Include="../Tools/FileSystem.cs" Link="Tools/FileSystem.cs" />
+    <Compile Include="../Tools/xGuid.cs" Link="Tools/xGuid.cs" />
+    <Compile Include="../Tools/ShortPacking.cs" Link="Tools/ShortPacking.cs" />
     <None Include="README.md" Pack="true" PackagePath="/" />
   </ItemGroup>
 </Project>

@@ -1,16 +1,12 @@
+using static MNX.Archive;
 using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
-using Mash.IO.Format.MNX.Archive.Codecs;
-using Mash.IO.Format.MNX.Archive.Resume;
-using Mash.IO.Format.MNX.Archive;
-using Mash.IO.Format.MNX;
-using ArchiveFile = Mash.IO.Format.MNX.MNX;
-using VirtualFile = Mash.IO.Format.MNX.VFile.VFile;
+using MNX;
 
-namespace Mash.IO.Format.MNX.Native;
+namespace MNX.Native;
 [StructLayout(LayoutKind.Sequential, Pack = 8)]
 public struct CreateOptions {
     public uint StructSize;
@@ -54,8 +50,8 @@ public static unsafe partial class Exports {
         public int Status { get; } = status;
         }
 
-    private sealed class Context(ArchiveFile archive) {
-        public readonly ArchiveFile Archive = archive;
+    private sealed class Context(Archive archive) {
+        public readonly Archive Archive = archive;
         public readonly object Gate = new();
         public bool Active, Closed;
         public CancellationTokenSource Cancellation = new();
@@ -161,17 +157,17 @@ public static unsafe partial class Exports {
         span[length] = 0;
         }
 
-    private static void Result(ArchiveFile.ReturnCode code, bool verify = false) {
+    private static void Result(ReturnCode code, bool verify = false) {
         _lastReturnCode = (ulong)code;
-        if (code == ArchiveFile.ReturnCode.Success) {
+        if (code == ReturnCode.Success) {
             return;
             }
 
-        int status = verify ? Corrupt : (code & (ArchiveFile.ReturnCode.GuidNotFound | ArchiveFile.ReturnCode.ArchiveNonExistant)) != 0 ? NotFound : Failed;
+        int status = verify ? Corrupt : (code & (ReturnCode.GuidNotFound | ReturnCode.ArchiveNonExistant)) != 0 ? NotFound : Failed;
         throw new NativeError(status, $"MNX operation returned {code}.");
         }
 
-    private static void Fill(VirtualFile file, EntryInfo* output) {
+    private static void Fill(VFile file, EntryInfo* output) {
         *output = default;
         output->StructSize = (uint)sizeof(EntryInfo);
         output->IsDirectory = file.IsDirectory ? 1u : 0u;
@@ -190,7 +186,7 @@ public static unsafe partial class Exports {
         Copy(file.Name[..end], output->Name, 129);
         }
 
-    private static void List(IReadOnlyCollection<VirtualFile> files, EntryInfo* entries, ulong capacity, ulong* count) {
+    private static void List(IReadOnlyCollection<VFile> files, EntryInfo* entries, ulong capacity, ulong* count) {
         Required(count != null, "Count output is NULL.");
         *count = (ulong)files.Count;
         if (entries == null && capacity == 0) {
@@ -203,12 +199,12 @@ public static unsafe partial class Exports {
             }
 
         int index = 0;
-        foreach (VirtualFile file in files) {
+        foreach (VFile file in files) {
             Fill(file, entries + index++);
             }
         }
 
-    private static void Register(ArchiveFile archive, ulong* handle) {
+    private static void Register(Archive archive, ulong* handle) {
         Context context = new Context(archive);
         archive.ProgressReport += context.Progress;
         ulong id = checked((ulong)Interlocked.Increment(ref _nextHandle));
@@ -239,7 +235,7 @@ public static unsafe partial class Exports {
 
         return Guard(() => {
             Required(handle != null, "Handle output is NULL.");
-            ArchiveFile archive = new ArchiveFile();
+            Archive archive = new Archive();
             try {
                 if (options != null) {
                     Required(
@@ -272,7 +268,7 @@ public static unsafe partial class Exports {
 
         return Guard(() => {
             Required(handle != null, "Handle output is NULL.");
-            ArchiveFile archive = new ArchiveFile();
+            Archive archive = new Archive();
             try {
                 archive.Open(Text(path), password == null ? null : Text(password));
                 Register(archive, handle);
@@ -338,13 +334,13 @@ public static unsafe partial class Exports {
     [UnmanagedCallersOnly(EntryPoint = "mnx_get_entry", CallConvs = [typeof(CallConvCdecl)])]
     public static int GetEntry(ulong handle, byte* id, EntryInfo* output) => Run(handle, context => {
         Required(output != null && output->StructSize == sizeof(EntryInfo), "Unsupported entry output struct.");
-        VirtualFile? file = context.Archive.GetFile(Id(id)) ?? throw new NativeError(NotFound, "Entry was not found.");
+        VFile? file = context.Archive.GetFile(Id(id)) ?? throw new NativeError(NotFound, "Entry was not found.");
         Fill(file, output);
         });
     [UnmanagedCallersOnly(EntryPoint = "mnx_get_entry_name", CallConvs = [typeof(CallConvCdecl)])]
     public static int GetEntryName(ulong handle, byte* id, byte* buffer, ulong capacity, ulong* required) => Run(handle, context => {
         Required(required != null, "A required-size pointer is needed.");
-        VirtualFile? file = context.Archive.GetFile(Id(id)) ?? throw new NativeError(NotFound, "Entry was not found.");
+        VFile? file = context.Archive.GetFile(Id(id)) ?? throw new NativeError(NotFound, "Entry was not found.");
         int bytes = Utf8.GetByteCount(file.Name) + 1;
         *required = (ulong)bytes;
         if (buffer == null) {
@@ -360,7 +356,7 @@ public static unsafe partial class Exports {
         });
     [UnmanagedCallersOnly(EntryPoint = "mnx_resume", CallConvs = [typeof(CallConvCdecl)])]
     public static int Resume(ulong handle, byte* queuePath) => Run(handle, context => {
-        ArchiveFile? archive = context.Archive;
+        Archive? archive = context.Archive;
         FileInfo queue = new FileInfo(Text(queuePath));
         bool overwrite = archive.Options.OverrideByDefault;
         archive.Options.OverrideByDefault = false;
@@ -380,8 +376,8 @@ public static unsafe partial class Exports {
     [UnmanagedCallersOnly(EntryPoint = "mnx_get_info", CallConvs = [typeof(CallConvCdecl)])]
     public static int GetInfo(ulong handle, ArchiveInfo* output) => Run(handle, context => {
         Required(output != null && output->StructSize == sizeof(ArchiveInfo), "Unsupported archive output struct.");
-        ArchiveFile? archive = context.Archive;
-        Mash.IO.Format.MNX.Archive.ArchiveInfo? info = archive.GetArchiveInfo();
+        Archive? archive = context.Archive;
+        MNX.ArchiveInfo? info = archive.GetArchiveInfo();
         *output = default;
         output->StructSize = (uint)sizeof(ArchiveInfo);
         output->FormatVersion = archive.FormatVersion;

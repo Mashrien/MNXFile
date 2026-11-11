@@ -2,9 +2,9 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text.Json;
-using Mash.IO.Format.MNX.Interop;
+using MNX.Interop;
 
-namespace Mash.IO.Format.MNX;
+namespace MNX;
 
 internal sealed unsafe class NativeApi {
     private static readonly Lazy<NativeApi> Loaded = new Lazy<NativeApi>(() => new NativeApi());

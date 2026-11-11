@@ -1,17 +1,13 @@
+using MNX.Tools;
 using System.Text;
-using Mash.IO.Format.MNX.Archive.Codecs;
-using Mash.IO.Format.MNX.Archive;
-using Mash.IO.Format.MNX.Chunk;
-using Mash.IO.Format.MNX.Tools;
-using ArchiveFile = Mash.IO.Format.MNX.MNX;
-using VirtualFile = Mash.IO.Format.MNX.VFile.VFile;
+using MNX.Storage;
 
-namespace Mash.IO.Format.MNX.Archive;
+namespace MNX;
 
 internal static class ArchiveIndex {
     private static readonly UTF8Encoding Utf8 = new(false, true);
-    internal static byte[] Serialize(IEnumerable<VirtualFile> files, FreeChunkSet free) {
-        VirtualFile[] entries = files.OrderBy(f => f.FileID).ToArray();
+    internal static byte[] Serialize(IEnumerable<VFile> files, FreeChunkSet free) {
+        VFile[] entries = files.OrderBy(f => f.FileID).ToArray();
         using MemoryStream stream = new MemoryStream();
         using BinaryWriter writer = new BinaryWriter(stream, Encoding.UTF8, true);
         writer.Write("MNXI"u8);
@@ -19,11 +15,11 @@ internal static class ArchiveIndex {
         writer.Write((ushort)0);
         writer.Write((uint)entries.Length);
         writer.Write((uint)free.Ranges.Count);
-        foreach (VirtualFile file in entries) {
+        foreach (VFile file in entries) {
             byte[] name = Utf8.GetBytes(file.Name);
             ArchiveFormat.ValidateName(file.Name);
-            GuidTools.WriteGuid(writer, file.FileID);
-            GuidTools.WriteGuid(writer, file.OwnerID);
+            xGuid.WriteGuid(writer, file.FileID);
+            xGuid.WriteGuid(writer, file.OwnerID);
             writer.Write(file.FirstChunk);
             writer.Write(file.SizeOriginal);
             writer.Write(file.CreationDateUtc.Ticks);
@@ -54,7 +50,7 @@ internal static class ArchiveIndex {
         return stream.ToArray();
         }
 
-    internal static (Dictionary<Guid, VirtualFile> entries, FreeChunkSet free) Deserialize(
+    internal static (Dictionary<Guid, VFile> entries, FreeChunkSet free) Deserialize(
         byte[] data,
         uint expectedEntries,
         uint indexChunks,
@@ -75,19 +71,19 @@ internal static class ArchiveIndex {
                 throw new InvalidDataException("Archive index counts are invalid.");
                 }
 
-            Dictionary<Guid, VirtualFile> entries = new Dictionary<Guid, VirtualFile>();
+            Dictionary<Guid, VFile> entries = new Dictionary<Guid, VFile>();
             HashSet<uint> firstChunks = new HashSet<uint>();
             List<(uint start, uint end)> spans = new List<(uint start, uint end)>();
             ulong occupied = 0;
             for (uint i = 0; i < count; i++) {
-                Guid id = GuidTools.ReadGuid(reader);
-                Guid parent = GuidTools.ReadGuid(reader);
+                Guid id = xGuid.ReadGuid(reader);
+                Guid parent = xGuid.ReadGuid(reader);
                 uint first = reader.ReadUInt32();
                 ulong size = reader.ReadUInt64();
                 DateTime created = new(reader.ReadInt64(), DateTimeKind.Utc);
                 DateTime modified = new(reader.ReadInt64(), DateTimeKind.Utc);
                 DateTime accessed = new(reader.ReadInt64(), DateTimeKind.Utc);
-                ArchiveFile.Attribs attributes = (ArchiveFile.Attribs)reader.ReadUInt16();
+                Archive.Attribs attributes = (Archive.Attribs)reader.ReadUInt16();
                 byte directory = reader.ReadByte();
                 int nameLength = reader.ReadUInt16();
                 if (nameLength == 0 || nameLength > ArchiveFormat.MaxNameBytes || directory > 1 || first <= indexChunks || first > totalChunks || id == Guid.Empty || id == rootId || !firstChunks.Add(first)) {
@@ -120,7 +116,7 @@ internal static class ArchiveIndex {
                     throw new InvalidDataException("Archive file extent metadata does not match its entry.");
                     }
 
-                VirtualFile file = new VirtualFile(id, parent, name, directory == 1, size, created, modified, accessed, attributes, first);
+                VFile file = new VFile(id, parent, name, directory == 1, size, created, modified, accessed, attributes, first);
                 file.SetExtents(extents);
                 uint runCount = reader.ReadUInt32();
                 if (runCount == 0 || runCount > sequence) {

@@ -1,15 +1,13 @@
+using static MNX.Archive;
 using System.Buffers.Binary;
 using System.Security.Cryptography;
 using System.Text.Json.Serialization;
 using System.Text.Json;
 using System.Text;
-using Mash.IO.Format.MNX.Archive.Codecs;
-using Mash.IO.Format.MNX.Archive;
-using ArchiveFile = Mash.IO.Format.MNX.MNX;
 using DiskFile = System.IO.File;
-using DiskNodeFlags = Mash.IO.Format.MNX.Chunk.NodeFlags;
+using DiskNodeFlags = MNX.Storage.NodeFlags;
 
-namespace Mash.IO.Format.MNX.Archive.Resume;
+namespace MNX;
 
 
 internal sealed record QueueEnvelope(string Format, string ChecksumAlgorithm, string PayloadSha256, QueuePayload Payload);
@@ -428,15 +426,15 @@ public static class ResumePassword {
 
 /// <summary>Validate, save and consume remaining queues and temporary keys for one archive.</summary>
 public sealed class ArchiveRecovery {
-    private readonly ArchiveFile _owner;
+    private readonly Archive _owner;
     private readonly ArchiveState _state;
-    internal ArchiveRecovery(ArchiveFile owner) {
+    internal ArchiveRecovery(Archive owner) {
         _owner = owner;
         _state = owner.State;
         }
 
     /// <summary>Validate the entire saved batch, then restore its IDs and queue order without writing archive data.</summary>
-    public ArchiveFile.ReturnCode LoadRemainingQueue(FileInfo queueFile) {
+    public ReturnCode LoadRemainingQueue(FileInfo queueFile) {
         lock (_state.SyncRoot) {
             _owner.CheckOpen();
             if (_state.QueueItems.Count > 0) {
@@ -481,7 +479,7 @@ public sealed class ArchiveRecovery {
             _state.QueueItems.AddRange(restored);
             _state.ValidatedResumeQueue = queueFile.FullName;
             _state.ValidatedResumeQueueHash = SHA256.HashData(DiskFile.ReadAllBytes(queueFile.FullName));
-            return _owner.SetError(ArchiveFile.ReturnCode.Success);
+            return _owner.SetError(ReturnCode.Success);
             }
         }
 

@@ -1,9 +1,6 @@
-using Mash.IO.Format.MNX.Archive.Codecs;
-using Mash.IO.Format.MNX.Archive;
+namespace MNX.Tools;
 
-namespace Mash.IO.Format.MNX.Tools;
-
-public static class FileSystemTools {
+public static class FileSystem {
     /// <summary>Identify symbolic links and reparse points, including links with missing targets.</summary>
     public static bool IsLink(FileSystemInfo source) {
         ArgumentNullException.ThrowIfNull(source);

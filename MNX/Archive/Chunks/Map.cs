@@ -1,7 +1,6 @@
-using Mash.IO.Format.MNX.Archive.Codecs;
-using Mash.IO.Format.MNX.Archive;
+using MNX;
 
-namespace Mash.IO.Format.MNX.Chunk;
+namespace MNX.Storage;
 
 
 internal readonly record struct FreeChunkRange(uint Start, uint Count) {
@@ -105,10 +104,3 @@ internal sealed class FreeChunkSet {
         return -1;
         }
     }
-
-
-/// <summary>A contiguous run of logical file chunks at consecutive archive positions.</summary>
-public readonly record struct ChunkExtent(uint FirstSequence, uint FirstChunk, uint Count);
-
-/// <summary>Adjacent chunks with equal indexed byte lengths. Continuous compression indexes compressed bytes.</summary>
-public readonly record struct ChunkLengthGroup(uint FirstSequence, uint Count, uint BytesPerChunk, ulong FirstByteOffset);

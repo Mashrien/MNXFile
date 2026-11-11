@@ -3,14 +3,11 @@ using System.IO.Compression;
 using K4os.Compression.LZ4.Streams;
 using K4os.Compression.LZ4;
 using Snappier;
-using Mash.IO.Format.MNX.Archive.Codecs;
-using Mash.IO.Format.MNX.Archive;
-using Mash.IO.Format.MNX.Chunk;
-using ArchiveFile = Mash.IO.Format.MNX.MNX;
+using MNX;
+using MNX.Storage;
 using DiskFile = System.IO.File;
-using VirtualFile = Mash.IO.Format.MNX.VFile.VFile;
 
-namespace Mash.IO.Format.MNX.Archive.Codecs;
+namespace MNX.Codecs;
 
 /// <summary>Shared codec stream construction for file streams and independent chunks.</summary>
 internal static class CompressionStreams {
@@ -108,10 +105,10 @@ internal static class ChunkCompression {
 /// <summary>Compression codecs available when creating an archive.</summary>
 /// <summary>Stream whole-file compression into bounded physical chunks.</summary>
 internal static class ArchiveCompressionIO {
-    internal static void Write(ArchiveFile owner, Stream input, long sourceLength, Guid parent, Guid id, string name, ArchiveFile.EntryMetadata metadata) {
+    internal static void Write(Archive owner, Stream input, long sourceLength, Guid parent, Guid id, string name, Archive.EntryMetadata metadata) {
         using FileStream archive = owner.OpenWrite();
         uint first = owner.Allocate();
-        VirtualFile file = ArchiveFile.FromMetadata(id, parent, name, metadata, false, (ulong)sourceLength, first);
+        VFile file = Archive.FromMetadata(id, parent, name, metadata, false, (ulong)sourceLength, first);
         long bytesCompleted = 0;
         Stopwatch? timer = Stopwatch.StartNew();
         try {
@@ -155,7 +152,7 @@ internal static class ArchiveCompressionIO {
             }
         }
 
-    private sealed class CompressedChunkSink(ArchiveFile owner, Stream archive, VirtualFile file, ArchiveFile.EntryMetadata metadata) : Stream {
+    private sealed class CompressedChunkSink(Archive owner, Stream archive, VFile file, Archive.EntryMetadata metadata) : Stream {
         private readonly byte[] _buffer = new byte[owner.State.ChunkSize - ArchiveFormat.NextHeaderSize];
         private uint _chunkSequence;
         private uint _physicalChunkIndex = file.FirstChunk;
@@ -240,7 +237,7 @@ internal static class ArchiveCompressionIO {
 
     }
 
-internal sealed class StoredPayloadStream(ArchiveFile owner, VirtualFile file) : Stream {
+internal sealed class StoredPayloadStream(Archive owner, VFile file) : Stream {
     private readonly FileStream _input = DiskFile.OpenRead(owner.State.Path!);
     private uint _chunkSequence;
     private byte[] _payload = Array.Empty<byte>();
@@ -308,12 +305,12 @@ internal sealed class StoredPayloadStream(ArchiveFile owner, VirtualFile file) :
     }
 
 internal sealed class ContinuousArchiveReadStream : Stream {
-    private readonly ArchiveFile _owner;
-    private readonly VirtualFile _file;
+    private readonly Archive _owner;
+    private readonly VFile _file;
     private StoredPayloadStream _payload;
     private Stream _decoder;
     private long _position;
-    internal ContinuousArchiveReadStream(ArchiveFile owner, VirtualFile file) {
+    internal ContinuousArchiveReadStream(Archive owner, VFile file) {
         _owner = owner;
         _file = file;
         _payload = new StoredPayloadStream(owner, file);
@@ -334,7 +331,7 @@ internal sealed class ContinuousArchiveReadStream : Stream {
     public override int Read(Span<byte> output) {
         lock (_owner.State.SyncRoot) {
             _owner.CheckOpen();
-            if (!_owner.State.Entries.TryGetValue(_file.FileID, out VirtualFile? current) || !ReferenceEquals(current, _file)) {
+            if (!_owner.State.Entries.TryGetValue(_file.FileID, out VFile? current) || !ReferenceEquals(current, _file)) {
                 throw new InvalidOperationException("The archived file changed while this stream was open.");
                 }
 

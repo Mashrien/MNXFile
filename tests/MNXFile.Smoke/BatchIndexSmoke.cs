@@ -1,8 +1,5 @@
 using System.Buffers.Binary;
-using Mash.IO.Format.MNX.Archive.Codecs;
-using Mash.IO.Format.MNX.Archive;
-using Mash.IO.Format.MNX;
-using ArchiveFile = Mash.IO.Format.MNX.MNX;
+using MNX;
 using DiskFile = System.IO.File;
 
 internal static class BatchIndexSmoke {
@@ -14,7 +11,7 @@ internal static class BatchIndexSmoke {
             }
 
         string path = Path.Combine(work, "batch-index.mnx");
-        using (ArchiveFile archive = new ArchiveFile()) {
+        using (Archive archive = new Archive()) {
             archive.Options.ChunkSize = 4096;
             archive.Create(new FileInfo(path));
             byte[] initial = Header(path);
@@ -31,8 +28,8 @@ internal static class BatchIndexSmoke {
                 });
             }
 
-        using (ArchiveFile archive = new ArchiveFile().Open(path)) {
-            if (archive.Files.Count != 350 || archive.IndexChunkCount <= 4 || archive.VerifyArchive() != ArchiveFile.ReturnCode.Success) {
+        using (Archive archive = new Archive().Open(path)) {
+            if (archive.Files.Count != 350 || archive.IndexChunkCount <= 4 || archive.VerifyArchive() != Archive.ReturnCode.Success) {
                 throw new InvalidOperationException("Batch growth or cancellation failed to persist the completed entries.");
                 }
             }

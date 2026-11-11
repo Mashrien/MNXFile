@@ -1,11 +1,8 @@
+using MNX.Tools;
 using System.Collections.ObjectModel;
-using Mash.IO.Format.MNX.Archive.Codecs;
-using Mash.IO.Format.MNX.Archive;
-using Mash.IO.Format.MNX.Chunk;
-using Mash.IO.Format.MNX.Tools;
-using ArchiveFile = Mash.IO.Format.MNX.MNX;
+using MNX.Storage;
 
-namespace Mash.IO.Format.MNX.VFile;
+namespace MNX;
 
 
 /// <summary>Metadata for an archived file or directory.</summary>
@@ -22,7 +19,7 @@ public sealed class VFile {
         DateTime created,
         DateTime modified,
         DateTime accessed,
-        ArchiveFile.Attribs attributes,
+        Archive.Attribs attributes,
         uint first
         ) {
         FileID = id;
@@ -41,8 +38,8 @@ public sealed class VFile {
     public Guid OwnerID { get; }
     public string Name { get; }
     public bool IsDirectory { get; }
-    public ArchiveFile.NodeFlags Flags => IsDirectory ? ArchiveFile.NodeFlags.IsDirectory : ArchiveFile.NodeFlags.None;
-    public ArchiveFile.Attribs Attributes { get; }
+    public Archive.NodeFlags Flags => IsDirectory ? Archive.NodeFlags.IsDirectory : Archive.NodeFlags.None;
+    public Archive.Attribs Attributes { get; }
     public ulong SizeOriginal { get; }
     public DateTime CreationDateUtc { get; }
     public DateTime ModificationDateUtc { get; }

@@ -1,4 +1,4 @@
-namespace Mash.IO.Format.MNX.Archive.Resume;
+namespace MNX;
 
 public sealed record QueueArchive(
     string Name,

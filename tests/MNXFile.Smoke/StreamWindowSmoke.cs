@@ -1,9 +1,5 @@
 using System.Security.Cryptography;
-using Mash.IO.Format.MNX.Archive.Codecs;
-using Mash.IO.Format.MNX.Archive;
-using Mash.IO.Format.MNX;
-using ArchiveFile = Mash.IO.Format.MNX.MNX;
-using VirtualFile = Mash.IO.Format.MNX.VFile.VFile;
+using MNX;
 
 internal static class StreamWindowSmoke {
     internal static void Run(string work) {
@@ -15,13 +11,13 @@ internal static class StreamWindowSmoke {
         foreach (ArchiveCompression compression in new[] { ArchiveCompression.None, ArchiveCompression.Brotli, ArchiveCompression.Snappy }) {
             foreach (bool encrypted in new[] { false, true }) {
                 string path = Path.Combine(work, $"stream-window-{compression}-{encrypted}.mnx");
-                using ArchiveFile archive = new ArchiveFile();
+                using Archive archive = new Archive();
                 archive.Options.Compression = compression;
                 archive.Options.CompressionLayout = ArchiveCompressionLayout.IndependentChunks;
                 archive.Options.CompressionLevel = compression == ArchiveCompression.Snappy ? 0 : 1;
                 archive.Create(new FileInfo(path), encrypted ? "sliding-window-check" : null);
                 archive.AddStreamNow(new MemoryStream(source), "small-reads.bin", source.Length);
-                VirtualFile file = archive.Files.Single();
+                VFile file = archive.Files.Single();
                 using Stream input = archive.OpenRead(file.FileID);
                 byte[] output = new byte[source.Length];
                 int completed = 0;

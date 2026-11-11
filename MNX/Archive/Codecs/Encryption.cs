@@ -1,11 +1,10 @@
 using System.Buffers.Binary;
 using System.Security.Cryptography;
-using Mash.IO.Format.MNX.Archive.Codecs;
-using Mash.IO.Format.MNX.Archive;
-using Mash.IO.Format.MNX.Chunk;
-using DiskNodeFlags = Mash.IO.Format.MNX.Chunk.NodeFlags;
+using MNX;
+using MNX.Storage;
+using DiskNodeFlags = MNX.Storage.NodeFlags;
 
-namespace Mash.IO.Format.MNX.Archive.Codecs;
+namespace MNX.Codecs;
 
 /// <summary>Archive chunk authentication and encryption, with independent chunk compression when selected.</summary>
 internal sealed class ArchiveCodec : IDisposable {

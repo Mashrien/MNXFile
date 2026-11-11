@@ -1,11 +1,9 @@
 using System.Buffers.Binary;
-using Mash.IO.Format.MNX.Archive.Codecs;
-using Mash.IO.Format.MNX.Archive;
 
-namespace Mash.IO.Format.MNX.Tools;
+namespace MNX.Tools;
 
 /// <summary>Converts GUIDs to fixed-width integer parts using the archive's little-endian byte order.</summary>
-public static class GuidTools {
+public static class xGuid {
     public static Guid GuidFromLongs(long firstPart, long secondPart) {
         Span<byte> guidBytes = stackalloc byte[16];
         BinaryPrimitives.WriteInt64LittleEndian(guidBytes, firstPart);

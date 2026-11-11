@@ -1,14 +1,10 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text.Json;
-using Mash.IO.Format.MNX.Archive;
-using Mash.IO.Format.MNX.Archive.Codecs;
-using Mash.IO.Format.MNX.Archive.Resume;
-using Mash.IO.Format.MNX.Interop;
-using ArchiveFile = Mash.IO.Format.MNX.MNX;
-using VirtualFile = Mash.IO.Format.MNX.VFile.VFile;
+using MNX;
+using MNX.Interop;
 
-namespace Mash.IO.Format.MNX.Native;
+namespace MNX.Native;
 
 public static unsafe partial class Exports {
     [UnmanagedCallersOnly(EntryPoint = "mnx_client_protocol_version", CallConvs = [typeof(CallConvCdecl)])]
@@ -44,7 +40,7 @@ public static unsafe partial class Exports {
                     output.ReturnCode = (ulong)context.Archive.ErrorStatus;
                     }
                 else {
-                    output.ReturnCode = (ulong)ArchiveFile.ReturnCode.Failed;
+                    output.ReturnCode = (ulong)Archive.ReturnCode.Failed;
                     }
                 }
 
@@ -107,7 +103,7 @@ public static unsafe partial class Exports {
             case "new":
             case "create" when input.Handle == 0:
             case "open" when input.Handle == 0:
-                ArchiveFile archive = new ArchiveFile();
+                Archive archive = new Archive();
                 try {
                     archive.Options.Compression = (ArchiveCompression)input.Compression;
                     archive.Options.CompressionLevel = input.Level;
@@ -131,10 +127,10 @@ public static unsafe partial class Exports {
                     throw;
                     }
             case "archive-is":
-                output.Value = ArchiveFile.IsArchive(new FileInfo(input.Path!));
+                output.Value = Archive.IsArchive(new FileInfo(input.Path!));
                 return;
             case "validate-name":
-                ArchiveFile.ValidateDestinationName(input.Name!);
+                Archive.ValidateDestinationName(input.Name!);
                 return;
             case "queue-is":
                 output.Value = RemainingQueue.IsQueue(new FileInfo(input.Path!));
@@ -172,7 +168,7 @@ public static unsafe partial class Exports {
                 return;
                 }
             context.Active = true;
-            ArchiveFile target = context.Archive;
+            Archive target = context.Archive;
             target.Options.CancellationToken = context.Cancellation.Token;
             target.Options.OverrideByDefault = input.Overwrite;
             target.Options.ProgressReportFrequency = Math.Max(1, input.Interval);
@@ -320,7 +316,7 @@ public static unsafe partial class Exports {
             }
         }
 
-    private static void FillClientInfo(ArchiveFile archive, ClientResponse output) {
+    private static void FillClientInfo(Archive archive, ClientResponse output) {
         output.ArchiveId = archive.ArchiveGuid;
         output.RootId = archive.RootDirectoryId;
         output.FormatVersion = archive.FormatVersion;
@@ -328,7 +324,7 @@ public static unsafe partial class Exports {
             output.ChunkSize = archive.Options.ChunkSize;
             return;
             }
-        Mash.IO.Format.MNX.Archive.ArchiveInfo info = archive.GetArchiveInfo();
+        MNX.ArchiveInfo info = archive.GetArchiveInfo();
         output.ArchiveId = info.ArchiveGuid;
         output.RootId = info.RootDirectoryId;
         output.Text = archive.ArchivePath;
@@ -347,7 +343,7 @@ public static unsafe partial class Exports {
         output.DirectoryCount = info.DirectoryCount;
         }
 
-    private static EntrySnapshot ToSnapshot(VirtualFile entry) {
+    private static EntrySnapshot ToSnapshot(VFile entry) {
         return new EntrySnapshot {
             Id = entry.FileID,
             Parent = entry.OwnerID,

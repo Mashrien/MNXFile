@@ -1,7 +1,7 @@
 using System.Text.Json.Serialization;
-using Mash.IO.Format.MNX.Archive.Resume;
+using MNX;
 
-namespace Mash.IO.Format.MNX.Interop;
+namespace MNX.Interop;
 
 // Protocol 1 is independent of MNX's on-disk format and native ABI1.
 // Additive fields have defaults; changing existing meanings requires a new protocol.

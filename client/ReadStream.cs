@@ -1,8 +1,8 @@
-using Mash.IO.Format.MNX.Interop;
+using MNX.Interop;
 
-namespace Mash.IO.Format.MNX;
+namespace MNX;
 
-public sealed unsafe partial class MNX {
+public sealed unsafe partial class Archive {
     public Stream OpenRead(Guid id) {
         ClientResponse response = Call(new ClientRequest { Operation = "stream-open", Id = id });
         return new NativeReadStream(this, _handle, response.StreamId, response.Length);
@@ -40,7 +40,7 @@ public sealed unsafe partial class MNX {
         return copied;
         }
 
-    private sealed class NativeReadStream(MNX owner, ulong archiveHandle, long streamId, long length) : Stream {
+    private sealed class NativeReadStream(Archive owner, ulong archiveHandle, long streamId, long length) : Stream {
         private long _position;
         private bool _closed;
         public override bool CanRead => !_closed;
