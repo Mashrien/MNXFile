@@ -17,6 +17,9 @@ if (args.Length != 0 && args[0] is "--missing" or "--incompatible") {
         }
     }
 
+string engineVersion = LibraryInfo.Version;
+Check(engineVersion.StartsWith("1.3.0-alpha.", StringComparison.Ordinal), "native engine reports its release version without opening an archive");
+Console.WriteLine("PASS: installed MNXFile version " + engineVersion);
 string root = Path.Combine(Path.GetTempPath(), "mnx-client-" + Guid.NewGuid().ToString("N"));
 Directory.CreateDirectory(root);
 try {

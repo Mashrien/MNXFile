@@ -77,16 +77,16 @@ cd MNXFile
 ```
 
 Each script reserves a build number automatically. The library/client version is
-`1.3.0-alpha.N`. **Both applications currently pin client `1.3.0-alpha.6`**, so use
+`1.3.0-alpha.N`. **The CLI pins client `1.3.0-alpha.7`; the GUI pins `1.3.0-alpha.6`**, so use
 this command when preparing their dependency feed:
 
 ```sh
-MNXBuildNumber=6 ./build.sh --test
+MNXBuildNumber=7 ./build.sh --test
 # Managed NuGet packages only, without building the native library:
-MNXBuildNumber=6 ./build.sh --packages-only
+MNXBuildNumber=7 ./build.sh --packages-only
 ```
 
-PowerShell equivalent: `$env:MNXBuildNumber='6'; .\build.ps1 -Test`.
+PowerShell equivalent: `$env:MNXBuildNumber='7'; .\build.ps1 -Test`.
 The package IDs are `Mash.MNXFile` (full managed engine) and
 `Mash.MNXFile.Client` (thin native client). Packages are generated locally; these
 versions have not been published to NuGet.org.

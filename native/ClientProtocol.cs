@@ -100,6 +100,9 @@ public static unsafe partial class Exports {
 
     private static void DispatchClientRequest(ClientRequest input, ClientResponse output, nint callback, nint user) {
         switch (input.Operation) {
+            case "library-version":
+                output.Text = LibraryInfo.Version;
+                return;
             case "new":
             case "create" when input.Handle == 0:
             case "open" when input.Handle == 0:

@@ -1,4 +1,14 @@
 <Project>
+  <!-- Older .NET 10 SDKs default to an ILCompiler with a Brotli bounds-write issue.
+       Keep newer installed pack versions when the SDK already selects them. -->
+  <Target Name="RequirePatchedMnxIlCompiler" BeforeTargets="ProcessFrameworkReferences" Condition="'$(PublishAot)' == 'true'">
+    <ItemGroup>
+      <KnownILCompilerPack Condition="'%(KnownILCompilerPack.TargetFramework)' == 'net10.0'
+          and $([MSBuild]::VersionLessThan('%(KnownILCompilerPack.ILCompilerPackVersion)', '10.0.14'))">
+        <ILCompilerPackVersion>10.0.14</ILCompilerPackVersion>
+      </KnownILCompilerPack>
+    </ItemGroup>
+  </Target>
   <!-- Direct IDE/project builds reserve a number here. The full-build scripts
        reserve once and export MNXBuildNumber so all release components agree. -->
   <UsingTask TaskName="MNXAllocateBuildNumber" TaskFactory="RoslynCodeTaskFactory"
