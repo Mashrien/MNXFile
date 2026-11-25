@@ -4,6 +4,13 @@ namespace MNX;
 
 /// <summary>Reports the version of the installed native engine loaded by this client.</summary>
 public static class LibraryInfo {
+    public static string FormatVersion {
+        get {
+            ClientResponse response = NativeApi.Instance.Request(new ClientRequest { Operation = "format-version" });
+            NativeApi.ThrowIfError(response);
+            return response.Text ?? throw new InvalidDataException("MNXFile returned an empty format version.");
+            }
+        }
     public static string Version {
         get {
             // Ask the engine itself. The client package can be updated independently.

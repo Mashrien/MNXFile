@@ -7,6 +7,8 @@ namespace MNX;
 
 /// <summary>Thin native client. The installed MNXFile library owns archive processing.</summary>
 public sealed unsafe partial class Archive : IDisposable {
+    public const ulong MaximumArchiveBytes = 140_737_488_322_560UL;
+    public string SemanticFormatVersion => $"0.1.{FormatVersion}";
     private readonly object _gate = new object();
     private ulong _handle;
     private bool _disposed;
@@ -36,7 +38,7 @@ public sealed unsafe partial class Archive : IDisposable {
                 if (!IsOpen) {
                     return Array.Empty<VFile>();
                     }
-                return _files ??= Array.AsReadOnly(Call(new ClientRequest { Operation = "files" }).Entries.Select(entry => new VFile(entry)).ToArray());
+                return _files ??= Array.AsReadOnly(EnumerateFiles().ToArray());
                 }
             }
         }
@@ -97,14 +99,30 @@ public sealed unsafe partial class Archive : IDisposable {
         }
 
     public VFile? GetFile(Guid id) {
-        return Files.FirstOrDefault(entry => entry.FileID == id);
+        EntrySnapshot? entry = Call(new ClientRequest { Operation = "get-entry", Id = id }).Entries.FirstOrDefault();
+        return entry is null ? null : new VFile(entry);
+        }
+    public VFile? GetEntry(Guid id) => GetFile(id);
+    public bool HasSubdirectories(Guid parent = default) {
+        return Call(new ClientRequest { Operation = "has-subdirectories", Parent = parent }).Value;
+        }
+    public IEnumerable<VFile> EnumerateFiles(uint offset = 0, uint? count = null) {
+        ulong remaining = count ?? uint.MaxValue;
+        while (remaining > 0) {
+            EntrySnapshot[] entries = Call(new ClientRequest { Operation = "enumerate-files", Offset = offset, Count = (int)Math.Min(256UL, remaining) }).Entries;
+            foreach (EntrySnapshot entry in entries) {
+                yield return new VFile(entry);
+                }
+            if (entries.Length == 0) {
+                yield break;
+                }
+            offset = checked(offset + (uint)entries.Length);
+            remaining -= (uint)entries.Length;
+            }
         }
     public IReadOnlyList<VFile> DirectoryList(Guid parent = default) {
         Guid owner = parent == Guid.Empty ? RootDirectoryId : parent;
-        if (owner != RootDirectoryId && GetFile(owner)?.IsDirectory != true) {
-            throw new DirectoryNotFoundException("Archive directory was not found.");
-            }
-        return Files.Where(entry => entry.OwnerID == owner).OrderBy(entry => entry.Name, StringComparer.Ordinal).ToArray();
+        return Call(new ClientRequest { Operation = "directory-list", Parent = owner }).Entries.Select(entry => new VFile(entry)).ToArray();
         }
     public ReturnCode Queue_AddFile(FileInfo file, Guid parent = default) {
         return Change("queue-file", file.FullName, parent: parent);

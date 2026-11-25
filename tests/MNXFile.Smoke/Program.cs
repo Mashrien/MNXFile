@@ -5,6 +5,14 @@ using DiskFile = System.IO.File;
 string work = Path.Combine(Path.GetTempPath(), "mnx-smoke-" + Guid.NewGuid().ToString("N"));
 Directory.CreateDirectory(work);
 try {
+    CapacitySmoke.Run();
+    if (args.Contains("--capacity-only")) {
+        return;
+        }
+    PagedIndexSmoke.Run(work);
+    if (args.Contains("--paged-only")) {
+        return;
+        }
     BatchIndexSmoke.Run(work);
     if (args.Contains("--batch-only")) {
         return;
@@ -230,7 +238,7 @@ try {
     using (Archive archive = new Archive().Open(compressedPath)) {
         VFile file = archive.DirectoryList().Single();
         Check(
-            archive.FormatVersion == 7 && archive.Compression == ArchiveCompression.Brotli,
+            archive.FormatVersion == 8 && archive.Compression == ArchiveCompression.Brotli,
             "compression format settings persisted"
             );
         Check(
@@ -380,7 +388,7 @@ try {
     uint encryptedSeedChunk;
     using (Archive archive = new Archive().Open(encryptedIndexPath, passphrase)) {
         Check(
-            archive.FormatVersion == 7 && archive.IsEncrypted && archive.Compression == ArchiveCompression.None,
+            archive.FormatVersion == 8 && archive.IsEncrypted && archive.Compression == ArchiveCompression.None,
             "encryption-only settings"
             );
         Check(archive.DirectoryList().Count == 151, "expanded encrypted index lists entries");
@@ -433,7 +441,7 @@ try {
         using (Archive archive = new Archive().Open(path)) {
             VFile file = archive.DirectoryList().Single();
             Check(
-                archive.FormatVersion == 7 && archive.ChunkSize == 32768 && archive.CompressionLayout == ArchiveCompressionLayout.Continuous && archive.Compression == method && archive.CompressionLevel == level,
+                archive.FormatVersion == 8 && archive.ChunkSize == 32768 && archive.CompressionLayout == ArchiveCompressionLayout.Continuous && archive.Compression == method && archive.CompressionLevel == level,
                 $"{method} header settings"
                 );
             foreach (int offset in new[] {
@@ -543,7 +551,7 @@ try {
     using (Archive archive = new Archive().Open(secureLz4, passphrase)) {
         VFile file = archive.DirectoryList().Single();
         Check(
-            archive.FormatVersion == 7 && archive.ChunkSize == 32768 && archive.IsEncrypted && archive.Compression == ArchiveCompression.LZ4 && archive.ReadFileRange(file.FileID, 85_000, 30_000).SequenceEqual(codecSample.AsSpan(85_000, 30_000).ToArray()) && archive.VerifyArchive() == Archive.ReturnCode.Success,
+            archive.FormatVersion == 8 && archive.ChunkSize == 32768 && archive.IsEncrypted && archive.Compression == ArchiveCompression.LZ4 && archive.ReadFileRange(file.FileID, 85_000, 30_000).SequenceEqual(codecSample.AsSpan(85_000, 30_000).ToArray()) && archive.VerifyArchive() == Archive.ReturnCode.Success,
             "secure LZ4 reopen and verify"
             );
         }
@@ -644,7 +652,7 @@ try {
     Guid wideId;
     using (Archive archive = new Archive().Create(new FileInfo(widePath))) {
         Check(
-            archive.FormatVersion == 7 && archive.ChunkSize == 32768 && archive.IndexChunkCount == 1,
+            archive.FormatVersion == 8 && archive.ChunkSize == 32768 && archive.IndexChunkCount == 1,
             "32 KiB format defaults"
             );
         using MemoryStream input = new MemoryStream(wideBytes);
@@ -682,7 +690,7 @@ try {
 
     using (Archive archive = new Archive().Open(widePath)) {
         Check(
-            archive.FormatVersion == 7 && archive.ChunkSize == 32768 && archive.IndexChunkCount > 1 && archive.DirectoryList().Count == 350 && archive.VerifyArchive() == Archive.ReturnCode.Success,
+            archive.FormatVersion == 8 && archive.ChunkSize == 32768 && archive.IndexChunkCount > 1 && archive.DirectoryList().Count == 350 && archive.VerifyArchive() == Archive.ReturnCode.Success,
             "32 KiB archive reopens after index growth and compaction"
             );
         }
@@ -702,7 +710,7 @@ try {
     using (Archive archive = new Archive().Open(wideIndependentPath)) {
         VFile file = archive.DirectoryList().Single();
         Check(
-            archive.FormatVersion == 7 && archive.ChunkSize == 32768 && archive.CompressionLayout == ArchiveCompressionLayout.IndependentChunks && archive.ReadFileRange(file.FileID, 132_000, 40_000).SequenceEqual(codecSample.AsSpan(132_000, 40_000).ToArray()) && archive.VerifyArchive() == Archive.ReturnCode.Success,
+            archive.FormatVersion == 8 && archive.ChunkSize == 32768 && archive.CompressionLayout == ArchiveCompressionLayout.IndependentChunks && archive.ReadFileRange(file.FileID, 132_000, 40_000).SequenceEqual(codecSample.AsSpan(132_000, 40_000).ToArray()) && archive.VerifyArchive() == Archive.ReturnCode.Success,
             "32 KiB independent range and verification"
             );
         }
@@ -723,7 +731,7 @@ try {
     using (Archive archive = new Archive().Open(wideEncryptedPath, passphrase)) {
         VFile file = archive.DirectoryList().Single();
         Check(
-            archive.FormatVersion == 7 && archive.ChunkSize == 32768 && archive.IsEncrypted && archive.Compression == ArchiveCompression.None && archive.ReadFileRange(file.FileID, 0, tailData.Length).SequenceEqual(tailData) && archive.VerifyArchive() == Archive.ReturnCode.Success,
+            archive.FormatVersion == 8 && archive.ChunkSize == 32768 && archive.IsEncrypted && archive.Compression == ArchiveCompression.None && archive.ReadFileRange(file.FileID, 0, tailData.Length).SequenceEqual(tailData) && archive.VerifyArchive() == Archive.ReturnCode.Success,
             "32 KiB encryption-only reopen and verification"
             );
         }

@@ -7,7 +7,7 @@ public sealed record ArchiveInfo(
     Guid ArchiveGuid,
     Guid RootDirectoryId,
     string Path,
-    long SizeOnDisk,
+    ulong SizeOnDisk,
     uint ChunkCount,
     uint IndexChunkCount,
     uint FreeChunkCount,

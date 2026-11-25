@@ -18,7 +18,9 @@ if (args.Length != 0 && args[0] is "--missing" or "--incompatible") {
     }
 
 string engineVersion = LibraryInfo.Version;
-Check(engineVersion.StartsWith("1.3.0-alpha.", StringComparison.Ordinal), "native engine reports its release version without opening an archive");
+Check(engineVersion.StartsWith("1.3.1-alpha.", StringComparison.Ordinal), "native engine reports its release version without opening an archive");
+Check(LibraryInfo.FormatVersion == "0.1.8", "native engine reports the semantic storage format without opening an archive");
+Check(Archive.MaximumArchiveBytes == 140_737_488_322_560UL, "client reports the exact physical archive capacity");
 Console.WriteLine("PASS: installed MNXFile version " + engineVersion);
 string root = Path.Combine(Path.GetTempPath(), "mnx-client-" + Guid.NewGuid().ToString("N"));
 Directory.CreateDirectory(root);
@@ -73,6 +75,10 @@ try {
         Check(archive.ProcessAddQueue((_, _, phase, _) => { phases.Add(phase); return false; }) == ReturnCode.Success, "process");
         Check(phases.SequenceEqual(new[] { 0, 1 }), "file boundary callbacks");
         Guid fileId = archive.Files.Single().FileID;
+        Check(archive.GetEntry(fileId)?.FileID == fileId && archive.GetEntry(Guid.NewGuid()) is null, "direct native GUID metadata lookup");
+        Check(archive.DirectoryList().Single().FileID == fileId && !archive.HasSubdirectories(), "native directory descriptor lookup");
+        Check(archive.EnumerateFiles(0, 1).Single().FileID == fileId && !archive.EnumerateFiles(1, 1).Any(), "bounded native entry enumeration");
+        Check(archive.SemanticFormatVersion == "0.1.8", "archive semantic format version");
         Check(archive.ReadFileRange(fileId, 127, 4097).SequenceEqual(contents.AsSpan(127, 4097).ToArray()), "bounded range");
         using (Stream stored = archive.OpenRead(fileId)) {
             using SHA256 hash = SHA256.Create();
@@ -108,6 +114,21 @@ try {
         Check(archive.VerifyArchive() == ReturnCode.Success, "reopen verify");
         Console.WriteLine("PASS: native client " + compression + " encryption/queue/callbacks/stream/range/extract/key/compact/reopen");
         }
+
+    string pagedSource = Path.Combine(root, "paged-source");
+    Directory.CreateDirectory(pagedSource);
+    for (int index = 0; index < 300; index++) {
+        File.WriteAllText(Path.Combine(pagedSource, "entry-" + index.ToString("D3") + ".txt"), index.ToString());
+        }
+    using (Archive paged = new Archive().Create(new FileInfo(Path.Combine(root, "paged-client.mnx")))) {
+        paged.Queue_AddDirectory(new DirectoryInfo(pagedSource));
+        paged.ProcessAddQueue();
+        Guid folder = paged.DirectoryList().Single().FileID;
+        Check(paged.EnumerateFiles().Count() == 301 && paged.EnumerateFiles(255, 4).Count() == 4 && !paged.EnumerateFiles(301, 1).Any(), "native enumeration crosses its 256-entry response boundary");
+        Check(paged.DirectoryList(folder).Count == 300 && paged.HasSubdirectories() && !paged.HasSubdirectories(folder), "native folder lookup remains independent of whole-index snapshots");
+        Check(paged.GetArchiveInfo().FileCount == 300 && paged.GetArchiveInfo().DirectoryCount == 1, "native occupancy counts after paged mutation");
+        }
+    Console.WriteLine("PASS: native client paged enumeration, GUID lookup, directory lookup, subdirectory flags and semantic format identity");
 
     using Archive cancelled = new Archive();
     string cancelledPath = Path.Combine(root, "cancelled.mnx");

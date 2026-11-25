@@ -54,7 +54,7 @@ typedef struct mnx_archive_info {
     uint32_t struct_size, format_version, chunk_size;
     int32_t compression, compression_level, compression_layout;
     uint32_t encrypted, reserved;
-    int64_t size_on_disk;
+    uint64_t size_on_disk;
     uint32_t chunk_count, index_chunk_count, free_chunk_count, free_range_count;
     uint32_t file_count, directory_count;
     char archive_id[37], root_id[37];
@@ -85,6 +85,9 @@ MNX_API int32_t MNX_CALL mnx_create(const char* path, const char* password,
     const mnx_create_options* options, mnx_handle* archive);
 MNX_API int32_t MNX_CALL mnx_open(const char* path, const char* password, mnx_handle* archive);
 MNX_API int32_t MNX_CALL mnx_close(mnx_handle archive);
+/* Bounded whole-index enumeration. offset is an ordinal, capacity is 1-256. */
+MNX_API int32_t MNX_CALL mnx_list_page(mnx_handle archive, uint32_t offset,
+    mnx_entry_info* entries, uint32_t capacity, uint32_t* count);
 MNX_API int32_t MNX_CALL mnx_set_progress(mnx_handle archive,
     mnx_progress_callback callback, void* context, int32_t interval_ms);
 /* Newly opened handles replace duplicate names by default, as the managed API

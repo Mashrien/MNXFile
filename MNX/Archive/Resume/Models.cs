@@ -9,7 +9,7 @@ public sealed record QueueArchive(
     int ChunkSize,
     long Length,
     uint IndexChunks,
-    uint IndexBytes,
+    ulong IndexBytes,
     string HeaderSha256,
     string IndexSha256
     );

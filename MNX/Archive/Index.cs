@@ -11,7 +11,7 @@ internal static class ArchiveIndex {
         using MemoryStream stream = new MemoryStream();
         using BinaryWriter writer = new BinaryWriter(stream, Encoding.UTF8, true);
         writer.Write("MNXI"u8);
-        writer.Write(ArchiveFormat.CurrentVersion);
+        writer.Write((ushort)7);
         writer.Write((ushort)0);
         writer.Write((uint)entries.Length);
         writer.Write((uint)free.Ranges.Count);
@@ -61,7 +61,7 @@ internal static class ArchiveIndex {
         ) {
         using BinaryReader reader = new BinaryReader(new MemoryStream(data), Encoding.UTF8, false);
         try {
-            if (!reader.ReadBytes(4).AsSpan().SequenceEqual("MNXI"u8) || reader.ReadUInt16() != ArchiveFormat.CurrentVersion || reader.ReadUInt16() != 0) {
+            if (!reader.ReadBytes(4).AsSpan().SequenceEqual("MNXI"u8) || reader.ReadUInt16() != 7 || reader.ReadUInt16() != 0) {
                 throw new InvalidDataException("Unsupported archive index.");
                 }
 
@@ -107,7 +107,7 @@ internal static class ArchiveIndex {
                         }
 
                     extents.Add(new ChunkExtent(sequence, physical, length));
-                    spans.Add((physical, checked(physical + length - 1)));
+                    spans.Add((physical, checked((uint)((ulong)physical + length - 1))));
                     occupied += length;
                     sequence = checked(sequence + length);
                     }

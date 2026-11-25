@@ -1,6 +1,15 @@
-# MNX7 disk format
+# MNX disk formats
 
-This document describes the format emitted by this project. It is not a compatibility claim for older prototypes. All integers are little endian. GUID fields occupy two little-endian 64-bit parts, exactly 16 bytes in .NET GUID byte order. Text is UTF-8. Chunk numbers are one based after the header, and physical offset is `chunkNumber * chunkSize`. The current format permits 4096-byte or 32768-byte chunks; the default is 32768 bytes. Chunk size is fixed when the archive is created.
+New archives use **MNX8 / semantic format 0.1.8**. The current front-index page
+layout, 64-bit index offsets/lengths, exact physical capacity, lookup tables,
+cache behavior and wire7 migration are described in
+[paged index and capacity](docs/paged-index-capacity.md). Data chunk records retain
+the layout below. The following header/front-index sections document **MNX7 /
+0.1.7**, which remains readable but is upgraded to MNX8 on its next write.
+
+## MNX7 compatibility reference
+
+All integers are little endian. GUID fields occupy two little-endian 64-bit parts, exactly 16 bytes in .NET GUID byte order. Text is UTF-8. Chunk numbers are one based after the header, and physical offset is `chunkNumber * chunkSize`. Both formats permit 4096-byte or 32768-byte chunks; the default is 32768 bytes. Chunk size is fixed when the archive is created.
 
 Archive files use the `.mnx` extension. The signatures are `MNX7` for archive headers, `MNXI` for the front index, and `MNXC` for data chunks. Index encryption uses the `MNXI7` authentication domain. Earlier prototype formats are not supported.
 

@@ -15,8 +15,9 @@ internal static class ArchiveFormat {
     internal const int InlineNameBytes = 128;
     internal const int MaxNameBytes = ushort.MaxValue;
     internal const uint InitialIndexChunks = 4;
-    internal const ushort CurrentVersion = 7;
-    private static readonly byte[] CurrentMagic = "MNX7"u8.ToArray();
+    internal const ushort CurrentVersion = 8;
+    internal const ulong MaximumArchiveBytes = 140_737_488_322_560UL;
+    private static readonly byte[] CurrentMagic = "MNX8"u8.ToArray();
     private static readonly UTF8Encoding Utf8 = new(false, true);
 
     internal sealed record HeaderInfo(
@@ -25,7 +26,7 @@ internal static class ArchiveFormat {
         uint chunks,
         uint entries,
         uint indexChunks,
-        uint indexBytes,
+        ulong indexBytes,
         byte[] indexHash,
         ushort version,
         DiskNodeFlags flags,
@@ -45,7 +46,7 @@ internal static class ArchiveFormat {
         using FileStream input = new FileStream(source.FullName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
         Span<byte> magic = stackalloc byte[4];
         int count = input.ReadAtLeast(magic, magic.Length, throwOnEndOfStream: false);
-        return count == CurrentMagic.Length && magic.SequenceEqual(CurrentMagic);
+        return count == CurrentMagic.Length && (magic.SequenceEqual(CurrentMagic) || magic.SequenceEqual("MNX7"u8));
         }
 
     // Archive names are opaque Unicode segments. Backslash is a legal Linux
@@ -73,9 +74,11 @@ internal static class ArchiveFormat {
         byte[]? indexTag = null,
         ArchiveCompression compression = ArchiveCompression.None,
         int compressionLevel = 0,
-        int chunkSize = ChunkSize
+        int chunkSize = ChunkSize,
+        ulong? storedIndexBytes = null,
+        byte[]? storedIndexHash = null
         ) {
-        if (version != CurrentVersion) {
+        if (version is not (7 or CurrentVersion)) {
             throw new ArgumentOutOfRangeException(nameof(version));
             }
 
@@ -85,7 +88,7 @@ internal static class ArchiveFormat {
 
         byte[] data = new byte[chunkSize];
         using (BinaryWriter writer = new BinaryWriter(new MemoryStream(data, true), Encoding.UTF8, false)) {
-            writer.Write(CurrentMagic);
+            writer.Write(version == 7 ? "MNX7"u8 : "MNX8"u8);
             writer.Write(version);
             writer.Write((ushort)chunkSize);
             writer.Write(chunkSize);
@@ -96,10 +99,10 @@ internal static class ArchiveFormat {
             writer.Write(chunks);
             writer.Write(entries);
             writer.Write(indexChunks);
-            writer.Write((uint)indexData.Length);
+            writer.Write(unchecked((uint)(storedIndexBytes ?? (ulong)indexData.Length)));
             }
 
-        SHA256.HashData(indexData).CopyTo(data, 64);
+        (storedIndexHash ?? SHA256.HashData(indexData)).CopyTo(data, 64);
         if (salt is { Length: 16 }) {
             salt.CopyTo(data, 96);
             }
@@ -113,7 +116,10 @@ internal static class ArchiveFormat {
             indexTag.CopyTo(data, 128);
             }
 
-        SHA256.HashData(data.AsSpan(0, 144)).CopyTo(data, 144);
+        if (version == 8) {
+            BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(176, 4), (uint)((storedIndexBytes ?? (ulong)indexData.Length) >> 32));
+            }
+        HeaderHash(data, version).CopyTo(data, 144);
         stream.Position = 0;
         stream.Write(data);
         stream.Flush();
@@ -128,11 +134,11 @@ internal static class ArchiveFormat {
         stream.Position = 0;
         stream.ReadExactly(data);
         ushort version = BinaryPrimitives.ReadUInt16LittleEndian(data.AsSpan(4, 2));
-        if (version != CurrentVersion || !data.AsSpan(0, 4).SequenceEqual(CurrentMagic)) {
+        if (version is not (7 or CurrentVersion) || !data.AsSpan(0, 4).SequenceEqual(version == 7 ? "MNX7"u8 : "MNX8"u8)) {
             throw new InvalidDataException("Unsupported MNX archive version or magic.");
             }
 
-        if (!SHA256.HashData(data.AsSpan(0, 144)).AsSpan().SequenceEqual(data.AsSpan(144, 32))) {
+        if (!HeaderHash(data, version).AsSpan().SequenceEqual(data.AsSpan(144, 32))) {
             throw new InvalidDataException("Archive header checksum does not match.");
             }
 
@@ -151,6 +157,10 @@ internal static class ArchiveFormat {
             throw new InvalidDataException("Archive length is not aligned to its chunk size.");
             }
 
+        if ((ulong)stream.Length > MaximumArchiveBytes) {
+            throw new InvalidDataException("Archive exceeds the supported physical capacity.");
+            }
+
         Guid archiveId = xGuid.ReadGuid(reader);
         Guid rootId = xGuid.ReadGuid(reader);
         if (archiveId == Guid.Empty || rootId == Guid.Empty) {
@@ -167,7 +177,10 @@ internal static class ArchiveFormat {
         uint chunks = reader.ReadUInt32();
         uint entries = reader.ReadUInt32();
         uint indexChunks = reader.ReadUInt32();
-        uint indexBytes = reader.ReadUInt32();
+        ulong indexBytes = reader.ReadUInt32();
+        if (version == 8) {
+            indexBytes |= (ulong)BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(176, 4)) << 32;
+            }
         byte[] indexHash = reader.ReadBytes(32);
         if ((ulong)chunks + 1 != (ulong)stream.Length / (ulong)chunkSize) {
             throw new InvalidDataException("Archive chunk count does not match file length.");
@@ -233,6 +246,16 @@ internal static class ArchiveFormat {
             }
 
         return data;
+        }
+
+    private static byte[] HeaderHash(byte[] data, ushort version) {
+        if (version == 7) {
+            return SHA256.HashData(data.AsSpan(0, 144));
+            }
+        Span<byte> protectedHeader = stackalloc byte[148];
+        data.AsSpan(0, 144).CopyTo(protectedHeader);
+        data.AsSpan(176, 4).CopyTo(protectedHeader.Slice(144));
+        return SHA256.HashData(protectedHeader);
         }
 
     internal static void WriteIndex(Stream stream, uint indexChunks, byte[] data, int chunkSize = ChunkSize) {

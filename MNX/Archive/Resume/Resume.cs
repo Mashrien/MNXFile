@@ -195,14 +195,14 @@ public static class RemainingQueue {
             input.Position = 0;
             input.ReadExactly(header);
             uint indexChunks = BinaryPrimitives.ReadUInt32LittleEndian(header.AsSpan(56));
-            uint indexBytes = BinaryPrimitives.ReadUInt32LittleEndian(header.AsSpan(60));
+            ulong indexBytes = validatedHeader.indexBytes;
             if (indexBytes > (ulong)indexChunks * (uint)chunkSize || chunkSize + (long)indexBytes > input.Length) {
                 throw new InvalidDataException("Archive front-index length is invalid.");
                 }
 
             using IncrementalHash indexHash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
             byte[] buffer = new byte[64 * 1024];
-            long left = indexBytes;
+            long left = validatedHeader.version == 8 ? checked((long)indexChunks * chunkSize) : checked((long)indexBytes);
             while (left > 0) {
                 int count = (int)Math.Min(left, buffer.Length);
                 input.ReadExactly(buffer.AsSpan(0, count));
@@ -211,7 +211,7 @@ public static class RemainingQueue {
                 }
 
             byte[] indexDigest = indexHash.GetHashAndReset();
-            if (!CryptographicOperations.FixedTimeEquals(indexDigest, validatedHeader.indexHash)) {
+            if (validatedHeader.version == 7 && !CryptographicOperations.FixedTimeEquals(indexDigest, validatedHeader.indexHash)) {
                 throw new InvalidDataException("Archive front-index checksum does not match.");
                 }
 

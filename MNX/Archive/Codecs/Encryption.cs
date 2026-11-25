@@ -186,6 +186,31 @@ internal sealed class ArchiveCodec : IDisposable {
         return result;
         }
 
+    internal void EncodeIndexPage(ReadOnlySpan<byte> plain, Span<byte> stored, ulong page, Span<byte> nonce, Span<byte> tag) {
+        if (_aes is null) {
+            plain.CopyTo(stored);
+            return;
+            }
+        RandomNumberGenerator.Fill(nonce);
+        _aes.Encrypt(nonce, plain, stored, tag, IndexPageAad(page));
+        }
+
+    internal void DecodeIndexPage(ReadOnlySpan<byte> stored, Span<byte> plain, ulong page, ReadOnlySpan<byte> nonce, ReadOnlySpan<byte> tag) {
+        if (_aes is null) {
+            stored.CopyTo(plain);
+            return;
+            }
+        _aes.Decrypt(nonce, stored, tag, plain, IndexPageAad(page));
+        }
+
+    private byte[] IndexPageAad(ulong page) {
+        byte[] data = new byte[29];
+        "MNXI8"u8.CopyTo(data);
+        _archiveId.TryWriteBytes(data.AsSpan(5, 16));
+        BinaryPrimitives.WriteUInt64LittleEndian(data.AsSpan(21, 8), page);
+        return data;
+        }
+
     private void WriteChunkAad( in ChunkHeader slot, Span<byte> destination) {
         _archiveId.TryWriteBytes(destination.Slice(0, 16));
         slot.Id.TryWriteBytes(destination.Slice(16, 16));

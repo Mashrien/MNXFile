@@ -22,6 +22,8 @@ internal sealed class ClientRequest {
     public bool ExportKey { get; set; }
     public long StreamId { get; set; }
     public long Length { get; set; }
+    public uint Offset { get; set; }
+    public int Count { get; set; } = 256;
     public long SourceCallback { get; set; }
     public long SourceContext { get; set; }
     public QueueSnapshot[] Queue { get; set; } = [];
@@ -43,7 +45,7 @@ internal sealed class ClientResponse {
     public int Level { get; set; }
     public int Layout { get; set; }
     public bool Encrypted { get; set; }
-    public long SizeOnDisk { get; set; }
+    public ulong SizeOnDisk { get; set; }
     public uint ChunkCount { get; set; }
     public uint IndexChunks { get; set; }
     public uint FreeChunks { get; set; }

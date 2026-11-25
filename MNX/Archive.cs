@@ -29,7 +29,9 @@ public sealed partial class Archive : IDisposable {
     public uint ChunkRangeStart => _state.ChunkCount <= _state.IndexChunks ? 0u : _state.IndexChunks + 1;
     public uint ChunkRangeEnd => _state.ChunkCount;
     public uint IndexChunkCount => _state.IndexChunks;
-    public ushort FormatVersion => ArchiveFormat.CurrentVersion;
+    public ushort FormatVersion => _state.FormatVersion;
+    public const ulong MaximumArchiveBytes = ArchiveFormat.MaximumArchiveBytes;
+    public string SemanticFormatVersion => $"0.1.{FormatVersion}";
     public int ChunkSize => _state.ChunkSize;
     public bool IsEncrypted => _state.StorageFlags.HasFlag(DiskNodeFlags.Encrypted);
     public ArchiveCompression Compression => _state.Codec?.Compression ?? ArchiveCompression.None;
@@ -57,13 +59,13 @@ public sealed partial class Archive : IDisposable {
                 ArchiveGuid,
                 RootDirectoryId,
                 _state.Path!,
-                ((long)_state.ChunkCount + 1) * _state.ChunkSize,
+                ((ulong)_state.ChunkCount + 1) * (uint)_state.ChunkSize,
                 _state.ChunkCount,
                 _state.IndexChunks,
                 (uint)_state.FreeChunks.Count,
                 (uint)_state.FreeChunks.Ranges.Count,
-                (uint)_state.Entries.Values.Count(f => !f.IsDirectory),
-                (uint)_state.Entries.Values.Count(f => f.IsDirectory)
+                _state.Entries.Count - _state.Entries.DirectoryCount,
+                _state.Entries.DirectoryCount
                 );
             }
         }
@@ -126,8 +128,8 @@ public sealed partial class Archive : IDisposable {
                     );
                 _state.IndexChunks = _state.ChunkSize == ArchiveFormat.LargeChunkSize ? 1u : ArchiveFormat.InitialIndexChunks;
                 _state.ChunkCount = _state.IndexChunks;
-                byte[] index = ArchiveIndex.Serialize(Array.Empty<VFile>(), _state.FreeChunks);
-                WriteIndexAndHeader(stream, index);
+                using IndexTemporaryFile index = PagedArchiveIndex.Build(_state.Entries, _state.FreeChunks);
+                WriteIndexAndHeader(stream, index.Stream);
                 _state.Path = archiveFile.FullName;
                 _state.ResumePassword = password is null ? null : System.Text.Encoding.UTF8.GetBytes(password);
                 _state.Entries.Clear();
@@ -173,20 +175,27 @@ public sealed partial class Archive : IDisposable {
                     encrypted ? ArchiveCodec.DeriveKey(password!, header.salt, header.iterations) : null,
                     header.flags.HasFlag(DiskNodeFlags.Streamed)
                     );
-                byte[] indexData = ArchiveFormat.ReadIndex(stream, header.indexBytes, header.indexHash, header.chunkSize);
-                if (encrypted) {
-                    indexData = openedCodec!.DecryptIndex(indexData, header.indexNonce, header.indexTag);
+                Dictionary<Guid, VFile> entries = new();
+                FreeChunkSet free;
+                PagedArchiveIndex? paged = null;
+                if (header.version == 8) {
+                    paged = CreatePagedIndex(archiveFile.FullName, openedCodec, header);
+                    free = paged.ReadFreeChunks();
                     }
-
-                (Dictionary<Guid, VFile> entries, FreeChunkSet free) = ArchiveIndex.Deserialize(
-                    indexData,
-                    header.entries,
-                    header.indexChunks,
-                    header.chunks,
-                    header.rootId,
-                    header.chunkSize,
-                    header.flags.HasFlag(DiskNodeFlags.Streamed)
-                    );
+                else if (!encrypted) {
+                    LegacyIndexReader legacy = new(stream, header);
+                    free = legacy.ReadFreeChunks();
+                    using IndexTemporaryFile logical = PagedArchiveIndex.Build(legacy.Enumerate(), header.entries, free);
+                    paged = CreateTemporaryPagedIndex(logical.Stream, header, openedCodec);
+                    free = paged.ReadFreeChunks();
+                    }
+                else {
+                    byte[] indexData = ArchiveFormat.ReadIndex(stream, checked((uint)header.indexBytes), header.indexHash, header.chunkSize);
+                    if (encrypted) {
+                        indexData = openedCodec.DecryptIndex(indexData, header.indexNonce, header.indexTag);
+                        }
+                    (entries, free) = ArchiveIndex.Deserialize(indexData, header.entries, header.indexChunks, header.chunks, header.rootId, header.chunkSize, header.flags.HasFlag(DiskNodeFlags.Streamed));
+                    }
                 foreach (VFile file in entries.Values) {
                     if (file.OwnerID != header.rootId && (!entries.TryGetValue(file.OwnerID, out VFile? parent) || !parent.IsDirectory)) {
                         throw new InvalidDataException($"Invalid parent directory for {file.Name}.");
@@ -214,20 +223,22 @@ public sealed partial class Archive : IDisposable {
                 _state.ChunkCount = header.chunks;
                 _state.IndexChunks = header.indexChunks;
                 _state.ChunkSize = header.chunkSize;
+                _state.FormatVersion = header.version;
                 _state.StorageFlags = header.flags;
                 _state.Salt = header.salt;
                 _state.KdfIterations = header.iterations;
                 _state.Codec = openedCodec;
                 _state.ResumePassword = password is null ? null : System.Text.Encoding.UTF8.GetBytes(password);
                 openedCodec = null;
-                _state.Entries.Clear();
+                _state.Entries.Reset(paged);
                 foreach (KeyValuePair<Guid, VFile> item in entries) {
                     _state.Entries.Add(item.Key, item.Value);
                     }
 
-                _state.FreeChunks.Clear();
-                foreach (FreeChunkRange range in free.Ranges) {
-                    _state.FreeChunks.AddRange(range.Start, range.Count);
+                _state.FreeChunks.ReplaceWith(free);
+
+                if (header.version == 7 && encrypted) {
+                    ConvertLegacyIndex(header);
                     }
 
                 ErrorStatus = ReturnCode.Success;
@@ -298,11 +309,40 @@ public sealed partial class Archive : IDisposable {
             }
         }
 
+    public VFile? GetEntry(Guid id) => GetFile(id);
+
+    public IEnumerable<VFile> EnumerateFiles(uint offset = 0, uint? count = null) {
+        uint remaining = count ?? uint.MaxValue;
+        while (remaining > 0) {
+            VFile[] page;
+            lock (_state.SyncRoot) {
+                CheckOpen();
+                page = _state.Entries.Enumerate(offset, Math.Min(256u, remaining)).ToArray();
+                }
+            if (page.Length == 0) {
+                yield break;
+                }
+            foreach (VFile file in page) {
+                yield return file;
+                }
+            offset = checked(offset + (uint)page.Length);
+            remaining -= (uint)page.Length;
+            }
+        }
+
+    public bool HasSubdirectories(Guid parent = default) {
+        lock (_state.SyncRoot) {
+            Guid owner = parent == Guid.Empty ? RootDirectoryId : parent;
+            RequireDirectory(owner);
+            return _state.Entries.HasSubdirectories(owner);
+            }
+        }
+
     public IReadOnlyList<VFile> DirectoryList(Guid parent = default) {
         lock (_state.SyncRoot) {
             Guid owner = parent == Guid.Empty ? RootDirectoryId : parent;
             RequireDirectory(owner);
-            return _state.Entries.Values.Where(f => f.OwnerID == owner).OrderBy(f => f.Name, StringComparer.Ordinal).ToArray();
+            return _state.Entries.Directory(owner).OrderBy(f => f.Name, StringComparer.Ordinal).ToArray();
             }
         }
 
@@ -711,7 +751,30 @@ public sealed partial class Archive : IDisposable {
             try {
                 using FileStream archive = DiskFile.OpenRead(_state.Path!);
                 ArchiveFormat.HeaderInfo? header = ArchiveFormat.ReadHeader(archive);
-                ArchiveFormat.ReadIndex(archive, header.indexBytes, header.indexHash, _state.ChunkSize);
+                if (header.version == 7) {
+                    archive.Position = _state.ChunkSize;
+                    using IncrementalHash hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+                    byte[] buffer = new byte[64 * 1024];
+                    ulong remaining = header.indexBytes;
+                    while (remaining > 0) {
+                        int take = (int)Math.Min((ulong)buffer.Length, remaining);
+                        archive.ReadExactly(buffer.AsSpan(0, take));
+                        hash.AppendData(buffer, 0, take);
+                        remaining -= (uint)take;
+                        }
+                    if (!hash.GetHashAndReset().AsSpan().SequenceEqual(header.indexHash)) {
+                        throw new InvalidDataException("Archive index checksum does not match.");
+                        }
+                    }
+                _state.Entries.ValidateIndex(Options.CancellationToken);
+                ulong freeChunks = 0;
+                foreach (FreeChunkRange range in _state.FreeChunks.Ranges) {
+                    freeChunks = checked(freeChunks + range.Count);
+                    }
+                if (freeChunks != _state.FreeChunks.Count) {
+                    throw new InvalidDataException("Archive free chunk count does not match its ranges.");
+                    }
+                ulong occupiedChunks = 0;
                 long totalBytes = _state.Entries.Values.Sum(file => (long)file.ChunkCount) * _state.ChunkSize;
                 if (UsesStreamCompression) {
                     totalBytes = checked(totalBytes + _state.Entries.Values.Where(file => !file.IsDirectory).Sum(file => checked((long)file.SizeOriginal)));
@@ -720,6 +783,13 @@ public sealed partial class Archive : IDisposable {
                 long checkedBytes = 0;
                 Stopwatch? progressTimer = Stopwatch.StartNew();
                 foreach (VFile file in _state.Entries.Values) {
+                    ValidateParentChain(file);
+                    foreach (ChunkExtent extent in file.ChunkExtents) {
+                        if (_state.FreeChunks.Overlaps(extent.FirstChunk, (ulong)extent.FirstChunk + extent.Count - 1)) {
+                            throw new InvalidDataException("Archive marks an occupied extent as free.");
+                            }
+                        occupiedChunks = checked(occupiedChunks + extent.Count);
+                        }
                     ulong size = 0;
                     for (uint sequence = 0; sequence < file.ChunkCount; sequence++) {
                         uint index = file.PhysicalChunk(sequence);
@@ -770,12 +840,27 @@ public sealed partial class Archive : IDisposable {
                         }
                     }
 
+                if (occupiedChunks + freeChunks != (ulong)_state.ChunkCount - _state.IndexChunks) {
+                    throw new InvalidDataException("Archive leaves data chunks untracked.");
+                    }
                 RaiseProgress("verify", checkedBytes, totalBytes);
                 return SetError(ReturnCode.Success);
                 }
             catch (Exception ex) when (ex is InvalidDataException or CryptographicException) {
                 return SetError(ReturnCode.Failed | ReturnCode.HashMismatch);
                 }
+            }
+        }
+
+    private void ValidateParentChain(VFile file) {
+        HashSet<Guid> ancestors = new() { file.FileID };
+        Guid parent = file.OwnerID;
+        while (parent != RootDirectoryId) {
+            VFile? directory = _state.Entries.GetValueOrDefault(parent);
+            if (directory is null || !directory.IsDirectory || !ancestors.Add(parent)) {
+                throw new InvalidDataException("Archive parent directory is missing or cyclic.");
+                }
+            parent = directory.OwnerID;
             }
         }
 
@@ -916,7 +1001,7 @@ public sealed partial class Archive : IDisposable {
         }
 
     private void DeleteRecursive(Guid id, Stream archive) {
-        foreach (VFile child in _state.Entries.Values.Where(f => f.OwnerID == id).ToArray()) {
+        foreach (VFile child in _state.Entries.Directory(id).ToArray()) {
             DeleteRecursive(child.FileID, archive);
             }
 
@@ -973,6 +1058,7 @@ public sealed partial class Archive : IDisposable {
                     }
 
                 file.RelocateChunk(moved.Sequence, hole);
+                _state.Entries.MarkChanged(file);
                 ChunkFormat.ClearSlot(archive, tail, _state.ChunkSize);
                 _state.FreeChunks.Remove(hole);
                 _state.FreeChunks.Add(tail);
@@ -1009,6 +1095,7 @@ public sealed partial class Archive : IDisposable {
 
         file.FirstChunk = destination;
         file.SetExtents(new[] { new ChunkExtent(0, destination, count) });
+        _state.Entries.MarkChanged(file);
         }
 
     internal void TrimFreeTail(Stream archive) {
@@ -1019,10 +1106,10 @@ public sealed partial class Archive : IDisposable {
     private void ReplaceIfNeeded(Guid parent, string name) {
         VFile? existing;
         if (_state.CurrentBatch is not null) {
-            existing = _state.CurrentBatch.Names.TryGetValue((parent, name), out Guid id) ? _state.Entries[id] : null;
+            existing = _state.CurrentBatch.Names.TryGetValue((parent, name), out Guid id) ? _state.Entries.GetValueOrDefault(id) : _state.Entries.Directory(parent).FirstOrDefault(file => file.Name == name);
             }
         else {
-            existing = _state.Entries.Values.FirstOrDefault(file => file.OwnerID == parent && file.Name == name);
+            existing = _state.Entries.Directory(parent).FirstOrDefault(file => file.Name == name);
             }
         if (existing is null) {
             return;
@@ -1117,7 +1204,7 @@ public sealed partial class Archive : IDisposable {
             return result;
             }
 
-        if (_state.ChunkCount == uint.MaxValue) {
+        if (((ulong)_state.ChunkCount + 2) * (uint)_state.ChunkSize > MaximumArchiveBytes || _state.ChunkCount == uint.MaxValue) {
             throw new IOException("Archive has reached its chunk limit.");
             }
 
@@ -1126,21 +1213,22 @@ public sealed partial class Archive : IDisposable {
 
     internal void Commit(Stream archive) {
         if (_state.CurrentBatch is not null) {
-            long indexBytes = checked(16 + _state.CurrentBatch.EntryBytes + 8L * _state.FreeChunks.Ranges.Count);
-            if (indexBytes <= (long)_state.IndexChunks * _state.ChunkSize) {
+            return;
+            }
+        while (true) {
+            using IndexTemporaryFile index = PagedArchiveIndex.Build(_state.Entries, _state.FreeChunks);
+            ulong pages = ((ulong)index.Stream.Length + (uint)(_state.ChunkSize - PagedIndexStream.EnvelopeBytes) - 1) / (uint)(_state.ChunkSize - PagedIndexStream.EnvelopeBytes);
+            if (pages <= _state.IndexChunks) {
+                WriteIndexAndHeader(archive, index.Stream);
+                archive.Flush();
+                ArchiveFormat.HeaderInfo header = ArchiveFormat.ReadHeader(archive);
+                PagedArchiveIndex paged = CreatePagedIndex(_state.Path!, _state.Codec!, header);
+                _state.Entries.Reset(paged, retainCached: true);
+                _state.FreeChunks.ReplaceWith(paged.ReadFreeChunks());
                 return;
                 }
+            ExpandIndex(archive, checked((long)pages * _state.ChunkSize));
             }
-
-        byte[] index = ArchiveIndex.Serialize(_state.Entries.Values, _state.FreeChunks);
-        while ((ulong)index.Length > (ulong)_state.IndexChunks * (ulong)_state.ChunkSize) {
-            ExpandIndex(archive, index.Length);
-            index = ArchiveIndex.Serialize(_state.Entries.Values, _state.FreeChunks);
-            }
-
-        WriteIndexAndHeader(archive, index);
-        archive.Flush();
-        _state.CurrentBatch?.Reset(_state.Entries.Values);
         }
 
     internal void AddEntry(VFile entry) {
@@ -1150,7 +1238,7 @@ public sealed partial class Archive : IDisposable {
 
     internal void RemoveEntry(Guid id) {
         if (_state.Entries.Remove(id, out VFile? entry)) {
-            _state.CurrentBatch?.Remove(entry);
+            _state.CurrentBatch?.Remove(entry!);
             }
         }
 
@@ -1159,7 +1247,7 @@ public sealed partial class Archive : IDisposable {
             return false;
             }
 
-        _state.CurrentBatch = new WriteBatch(_state.Entries.Values);
+        _state.CurrentBatch = new WriteBatch(Array.Empty<VFile>());
         return true;
         }
 
@@ -1171,9 +1259,12 @@ public sealed partial class Archive : IDisposable {
             }
         }
 
-    private void WriteIndexAndHeader(Stream archive, byte[] plainIndex) {
-        (byte[]? stored, byte[]? nonce, byte[]? tag) = _state.Codec?.EncryptIndex(plainIndex) ?? (plainIndex, new byte[12], new byte[16]);
-        ArchiveFormat.WriteIndex(archive, _state.IndexChunks, stored, _state.ChunkSize);
+    private void WriteIndexAndHeader(Stream archive, Stream plainIndex) {
+        (ulong bytes, uint pages, byte[] hash) = PagedIndexStream.Write(archive, plainIndex, _state.ChunkSize, _state.Codec!);
+        if (pages > _state.IndexChunks) {
+            throw new InvalidOperationException("Archive index reservation is too small.");
+            }
+        archive.SetLength(checked(((long)_state.ChunkCount + 1) * _state.ChunkSize));
         ArchiveFormat.WriteHeader(
             archive,
             ArchiveGuid,
@@ -1181,34 +1272,48 @@ public sealed partial class Archive : IDisposable {
             _state.ChunkCount,
             (uint)_state.Entries.Count,
             _state.IndexChunks,
-            stored,
+            Array.Empty<byte>(),
             ArchiveFormat.CurrentVersion,
             _state.StorageFlags,
             _state.Salt,
             _state.KdfIterations,
-            nonce,
-            tag,
+            null,
+            null,
             Compression,
             CompressionLevel,
-            _state.ChunkSize
+            _state.ChunkSize,
+            bytes,
+            hash
             );
+        _state.FormatVersion = ArchiveFormat.CurrentVersion;
         }
 
-    private void ExpandIndex(Stream archive, int requiredBytes) {
+    private void ExpandIndex(Stream archive, long requiredBytes) {
         uint oldCount = _state.IndexChunks;
-        uint required = checked((uint)((requiredBytes + _state.ChunkSize - 1) / _state.ChunkSize));
-        uint newCount = Math.Max(required, checked(oldCount * 2));
-        if (newCount >= uint.MaxValue) {
+        ulong required = checked(((ulong)requiredBytes + (uint)_state.ChunkSize - 1) / (uint)_state.ChunkSize);
+        ulong maximumChunks = Math.Min((ulong)uint.MaxValue, MaximumArchiveBytes / (uint)_state.ChunkSize - 1);
+        ulong expanded = Math.Max(required, Math.Min((ulong)oldCount * 2, maximumChunks));
+        if (expanded > maximumChunks) {
             throw new IOException("Archive index is too large.");
             }
-
+        uint newCount = (uint)expanded;
         uint originalCount = _state.ChunkCount;
+        ulong relocations = 0;
+        for (ulong index = (ulong)oldCount + 1; index <= Math.Min(newCount, originalCount); index++) {
+            if (!_state.FreeChunks.Contains((uint)index)) {
+                relocations++;
+                }
+            }
+        if (Math.Max((ulong)originalCount, expanded) + relocations > maximumChunks) {
+            throw new IOException("Archive index growth exceeds the physical capacity.");
+            }
         if (_state.ChunkCount < newCount) {
             _state.ChunkCount = newCount;
             archive.SetLength(((long)_state.ChunkCount + 1) * _state.ChunkSize);
             }
 
-        for (uint index = oldCount + 1; index <= newCount; index++) {
+        for (ulong ordinal = (ulong)oldCount + 1; ordinal <= newCount; ordinal++) {
+            uint index = (uint)ordinal;
             if (index > originalCount) {
                 continue;
                 }
@@ -1239,12 +1344,43 @@ public sealed partial class Archive : IDisposable {
                 }
 
             file.RelocateChunk(slot.Sequence, target);
+            _state.Entries.MarkChanged(file);
             }
 
         _state.IndexChunks = newCount;
         }
 
-    internal FileStream OpenWrite() => new(_state.Path!, FileMode.Open, FileAccess.ReadWrite, FileShare.None, 256 * 1024);
+    internal FileStream OpenWrite() => new(_state.Path!, FileMode.Open, FileAccess.ReadWrite, FileShare.Read, 256 * 1024);
+
+    private static PagedArchiveIndex CreatePagedIndex(string path, ArchiveCodec codec, ArchiveFormat.HeaderInfo header) {
+        return new(() => new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, 4096, FileOptions.RandomAccess), codec, header);
+        }
+
+    private void ConvertLegacyIndex(ArchiveFormat.HeaderInfo header) {
+        using IndexTemporaryFile logical = PagedArchiveIndex.Build(_state.Entries, _state.FreeChunks);
+        PagedArchiveIndex paged = CreateTemporaryPagedIndex(logical.Stream, header, _state.Codec!);
+        _state.Entries.Reset(paged);
+        _state.FreeChunks.ReplaceWith(paged.ReadFreeChunks());
+        }
+
+    private static PagedArchiveIndex CreateTemporaryPagedIndex(Stream logical, ArchiveFormat.HeaderInfo header, ArchiveCodec codec) {
+        IndexTemporaryFile physical = new();
+        try {
+            (ulong bytes, uint pages, byte[] hash) = PagedIndexStream.Write(physical.Stream, logical, header.chunkSize, codec);
+            physical.Stream.Flush();
+            ArchiveFormat.HeaderInfo temporaryHeader = header with {
+                indexChunks = pages,
+                indexBytes = bytes,
+                indexHash = hash,
+                version = 8
+                };
+            return new(physical.OpenReadView, codec, temporaryHeader, physical, header.indexChunks);
+            }
+        catch {
+            physical.Dispose();
+            throw;
+            }
+        }
     internal ReturnCode SetError(ReturnCode code) {
         ErrorStatus = code;
         return code;
