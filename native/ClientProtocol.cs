@@ -100,6 +100,9 @@ public static unsafe partial class Exports {
 
     private static void DispatchClientRequest(ClientRequest input, ClientResponse output, nint callback, nint user) {
         switch (input.Operation) {
+            case "format-version":
+                output.Text = LibraryInfo.FormatVersion;
+                return;
             case "library-version":
                 output.Text = LibraryInfo.Version;
                 return;
@@ -222,6 +225,19 @@ public static unsafe partial class Exports {
                         break;
                     case "files":
                         output.Entries = target.Files.Select(ToSnapshot).ToArray();
+                        break;
+                    case "enumerate-files":
+                        output.Entries = target.EnumerateFiles(input.Offset, (uint)Math.Clamp(input.Count, 1, 256)).Select(ToSnapshot).ToArray();
+                        break;
+                    case "get-entry":
+                        VFile? entry = target.GetEntry(input.Id);
+                        output.Entries = entry is null ? [] : [ToSnapshot(entry)];
+                        break;
+                    case "directory-list":
+                        output.Entries = target.DirectoryList(input.Parent).Select(ToSnapshot).ToArray();
+                        break;
+                    case "has-subdirectories":
+                        output.Value = target.HasSubdirectories(input.Parent);
                         break;
                     case "queue":
                         output.Queue = target.FileQueue.Select(ToSnapshot).ToArray();

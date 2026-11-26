@@ -6,7 +6,7 @@ namespace MNX;
 /// <summary>Owned mutable state for one archive. All access is serialized through SyncRoot.</summary>
 internal sealed class ArchiveState {
     internal object SyncRoot { get; } = new();
-    internal Dictionary<Guid, VFile> Entries { get; } = new();
+    internal ArchiveEntryStore Entries { get; } = new();
     internal List<FileQueueItem> QueueItems { get; } = new();
     internal FreeChunkSet FreeChunks { get; } = new();
     internal Configuration Options { get; } = new();
@@ -16,6 +16,7 @@ internal sealed class ArchiveState {
     internal string? Path { get; set; }
     internal uint ChunkCount;
     internal uint IndexChunks { get; set; }
+    internal ushort FormatVersion { get; set; } = ArchiveFormat.CurrentVersion;
     internal int ChunkSize { get; set; } = ArchiveFormat.ChunkSize;
     internal NodeFlags StorageFlags { get; set; }
     internal ArchiveCodec? Codec { get; set; }

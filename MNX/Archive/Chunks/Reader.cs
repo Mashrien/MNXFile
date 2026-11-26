@@ -32,7 +32,7 @@ internal sealed class ArchiveReadStream(Archive archive, VFile file) : Stream {
     public override int Read(Span<byte> destination) {
         lock (archive.State.SyncRoot) {
             archive.CheckOpen();
-            if (!archive.State.Entries.TryGetValue(file.FileID, out VFile? current) || !ReferenceEquals(current, file)) {
+            if (!archive.State.Entries.ContainsKey(file.FileID)) {
                 throw new InvalidOperationException("The archived file changed while this stream was open.");
                 }
 

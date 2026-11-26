@@ -28,7 +28,13 @@ explicitly supplied passphrases. Never log requests/responses containing secrets
 - new: allocate an unopened session, including root/instance IDs; queueing before
   creation is supported. create/open can reuse that session to preserve queued IDs.
 - create/open/info: archive settings, identity and occupancy.
-- files/queue: immutable metadata snapshots; the client caches them until mutation.
+- library-version/format-version: loaded engine package and semantic write-format
+  versions, available without opening an archive.
+- get-entry/directory-list/has-subdirectories: direct GUID/owner index lookup.
+- enumerate-files: bounded whole-index enumeration using UInt32 Offset and Count
+  (the engine clamps Count to 1-256). Responses contain only that page.
+- files/queue: legacy metadata snapshots; new clients construct the explicit Files
+  compatibility view through enumerate-files pages. Browser code uses folder lookups.
 - queue-file/queue-directory/queue-remove/process: engine scan and batch writing.
 - add-file/add-directory/add-stream: immediate addition; stream input is borrowed
   synchronously through a native read callback, never retained or put in temp files.
@@ -61,6 +67,14 @@ thread and archive IO stays on the worker. Whole-file boundary cancellation leav
 completed work valid and available for a recovery sidecar.
 
 ## Runtime updates
+
+Storage format 0.1.8 uses independently authenticated front-index pages, UInt64
+index lengths and metadata offsets, and bounded clean caches. See
+[paged index and capacity](paged-index-capacity.md) for the layout, exact physical
+capacity, streaming rebuild and wire7 compatibility behavior. `SizeOnDisk` uses an
+unsigned 64-bit total in the managed/JSON/C interfaces; its ABI1 field width and
+offset are unchanged. The additive C export `mnx_list_page` accepts a UInt32 ordinal,
+a 1-256-entry buffer and a UInt32 returned count.
 
 Replace the installed library atomically, preserve protocol 1 and exported ABI1,
 and restart applications to load the new engine. An existing process retains its

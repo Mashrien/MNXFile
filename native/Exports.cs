@@ -20,7 +20,7 @@ public unsafe struct ArchiveInfo {
     public uint StructSize, FormatVersion, ChunkSize;
     public int Compression, CompressionLevel, CompressionLayout;
     public uint Encrypted, Reserved;
-    public long SizeOnDisk;
+    public ulong SizeOnDisk;
     public uint ChunkCount, IndexChunkCount, FreeChunkCount, FreeRangeCount, FileCount, DirectoryCount;
     public fixed byte ArchiveId[37];
     public fixed byte RootId[37];
@@ -316,7 +316,37 @@ public static unsafe partial class Exports {
             *count = 0;
             }
 
-        return Run(handle, context => List(context.Archive.Files, entries, capacity, count));
+        return Run(handle, context => {
+            Required(count != null, "Count output is NULL.");
+            MNX.ArchiveInfo info = context.Archive.GetArchiveInfo();
+            *count = (ulong)info.FileCount + info.DirectoryCount;
+            if (entries == null && capacity == 0) {
+                return;
+                }
+            Required(entries != null, "Metadata buffer is NULL.");
+            if (capacity < *count) {
+                throw new NativeError(BufferTooSmall, "Metadata buffer is too small.");
+                }
+            ulong index = 0;
+            foreach (VFile file in context.Archive.EnumerateFiles()) {
+                Fill(file, entries + index++);
+                }
+            });
+        }
+
+    [UnmanagedCallersOnly(EntryPoint = "mnx_list_page", CallConvs = [typeof(CallConvCdecl)])]
+    public static int ListPage(ulong handle, uint offset, EntryInfo* entries, uint capacity, uint* count) {
+        if (count != null) {
+            *count = 0;
+            }
+        return Run(handle, context => {
+            Required(count != null && entries != null && capacity is > 0 and <= 256, "A page buffer of 1-256 entries is required.");
+            uint index = 0;
+            foreach (VFile file in context.Archive.EnumerateFiles(offset, capacity)) {
+                Fill(file, entries + index++);
+                }
+            *count = index;
+            });
         }
 
     [UnmanagedCallersOnly(EntryPoint = "mnx_list_directory", CallConvs = [typeof(CallConvCdecl)])]

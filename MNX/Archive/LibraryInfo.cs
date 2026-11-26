@@ -4,6 +4,7 @@ namespace MNX;
 
 /// <summary>Identifies the archive engine independently of an opened archive's format version.</summary>
 public static class LibraryInfo {
+    public static string FormatVersion => "0.1.8";
     public static string Version { get; } = ReadVersion();
 
     private static string ReadVersion() {

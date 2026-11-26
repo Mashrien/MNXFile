@@ -331,7 +331,7 @@ internal sealed class ContinuousArchiveReadStream : Stream {
     public override int Read(Span<byte> output) {
         lock (_owner.State.SyncRoot) {
             _owner.CheckOpen();
-            if (!_owner.State.Entries.TryGetValue(_file.FileID, out VFile? current) || !ReferenceEquals(current, _file)) {
+            if (!_owner.State.Entries.ContainsKey(_file.FileID)) {
                 throw new InvalidOperationException("The archived file changed while this stream was open.");
                 }
 

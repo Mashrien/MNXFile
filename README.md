@@ -3,7 +3,7 @@
 **An archive format and library created for large network archives and NAS backups.**
 
 MNX keeps the complete file/folder index in contiguous chunks at the front of the
-archive. Browsing and searching read that index without scanning file payloads;
+archive. Browsing reads requested index pages through bounded caches, without scanning file payloads;
 file contents are streamed through bounded buffers. The primary design target is hundreds-of-gigabytes or terabytes of
 backups/archives on NAS or other network storage, where seeks, network reads and
 memory use matter. Local archives use the same format and API.
@@ -23,6 +23,9 @@ also supplies a full managed library for callers that prefer an in-process engin
 ## Features
 
 - Front index with folder relationships, sizes, timestamps, flags and chunk extents.
+- Direct GUID and folder lookup, independently authenticated index pages and streamed
+  index rebuilds, including indexes larger than 2/4 GiB.
+- Physical archive capacity of **140,737,488,322,560 bytes**, including the header.
 - Fixed, aligned chunks: **32 KiB by default**, with a 4 KiB option at creation.
 - Add, list, search, extract, delete, verify and compact. Compaction fills free space
   with data from the archive's tail and truncates unused trailing chunks.
@@ -37,7 +40,9 @@ also supplies a full managed library for callers that prefer an in-process engin
   explicitly exported `.mnx-key` is convenience recovery material; see the queue spec.
 - Native AOT shared library, versioned C ABI/application protocol and thin C# client.
 
-Current disk schema: **MNX7**. It replaces the old MSX prototype; older prototype
+Current disk schema: **MNX8**, semantic format **0.1.8**. **MNX7** remains readable;
+see [paged index and capacity](docs/paged-index-capacity.md) for compatibility and cache behavior.
+It replaces the old MSX prototype; older prototype
 archives are not supported. Controlled cancel/resume is not a power-loss journal.
 
 ## Downloads and installation
@@ -77,16 +82,16 @@ cd MNXFile
 ```
 
 Each script reserves a build number automatically. The library/client version is
-`1.3.0-alpha.N`. **The CLI pins client `1.3.0-alpha.7`; the GUI pins `1.3.0-alpha.6`**, so use
-this command when preparing their dependency feed:
+`1.3.1-alpha.N`. Use an explicitly reserved build number when preparing the local
+dependency feed for a matching application build:
 
 ```sh
-MNXBuildNumber=7 ./build.sh --test
+MNXBuildNumber=10 ./build.sh --test
 # Managed NuGet packages only, without building the native library:
-MNXBuildNumber=7 ./build.sh --packages-only
+MNXBuildNumber=10 ./build.sh --packages-only
 ```
 
-PowerShell equivalent: `$env:MNXBuildNumber='7'; .\build.ps1 -Test`.
+PowerShell equivalent: `$env:MNXBuildNumber='10'; .\build.ps1 -Test`.
 The package IDs are `Mash.MNXFile` (full managed engine) and
 `Mash.MNXFile.Client` (thin native client). Packages are generated locally; these
 versions have not been published to NuGet.org.

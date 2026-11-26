@@ -11,22 +11,68 @@ internal readonly record struct FreeChunkRange(uint Start, uint Count) {
 /// <summary>Sorted, merged ranges of reusable physical chunks.</summary>
 internal sealed class FreeChunkSet {
     private readonly List<FreeChunkRange> _ranges = new();
-    internal IReadOnlyList<FreeChunkRange> Ranges => _ranges;
+    private IReadOnlyList<FreeChunkRange>? _source;
+    internal IReadOnlyList<FreeChunkRange> Ranges => _source ?? _ranges;
     internal ulong Count { get; private set; }
-    internal uint Min => _ranges[0].Start;
-    internal uint FirstRunLength => _ranges[0].Count;
+    internal uint Min => Ranges[0].Start;
+    internal uint FirstRunLength => Ranges[0].Count;
+
+    internal void SetSource(IReadOnlyList<FreeChunkRange> ranges, ulong count) {
+        _ranges.Clear();
+        _source = ranges;
+        Count = count;
+        }
+
+    internal void ReplaceWith(FreeChunkSet source) => SetSource(source.Ranges, source.Count);
+
+    private void MakeMutable() {
+        if (_source is not null) {
+            List<FreeChunkRange> validated = new(_source.Count);
+            ulong count = 0;
+            foreach (FreeChunkRange range in _source) {
+                validated.Add(range);
+                count = checked(count + range.Count);
+                }
+            if (count != Count) {
+                throw new InvalidDataException("Archive free chunk count does not match its ranges.");
+                }
+            _ranges.AddRange(validated);
+            _source = null;
+            }
+        }
 
     internal void Clear() {
         _ranges.Clear();
+        _source = null;
         Count = 0;
         }
 
     internal bool Contains(uint value) => Find(value) >= 0;
+    internal bool Overlaps(uint start, ulong end) {
+        int low = 0;
+        int high = Ranges.Count - 1;
+        while (low <= high) {
+            int middle = low + (high - low) / 2;
+            FreeChunkRange range = Ranges[middle];
+            if (range.End < start) {
+                low = middle + 1;
+                }
+            else if (range.Start > end) {
+                high = middle - 1;
+                }
+            else {
+                return true;
+                }
+            }
+        return false;
+        }
     internal void Add(uint value) => AddRange(value, 1);
     internal void AddRange(uint start, uint count) {
         if (count == 0 || (ulong)start + count - 1 > uint.MaxValue) {
             throw new ArgumentOutOfRangeException(nameof(count));
             }
+
+        MakeMutable();
 
         ulong end = (ulong)start + count - 1;
         int i = 0;
@@ -53,6 +99,8 @@ internal sealed class FreeChunkSet {
             return false;
             }
 
+        MakeMutable();
+
         FreeChunkRange range = _ranges[i];
         _ranges.RemoveAt(i);
         if (range.Start < value) {
@@ -68,6 +116,7 @@ internal sealed class FreeChunkSet {
         }
 
     internal void TrimTail(ref uint chunkCount, uint minimum) {
+        MakeMutable();
         while (_ranges.Count > 0 && _ranges[_ranges.Count - 1].End == chunkCount && chunkCount > minimum) {
             FreeChunkRange range = _ranges[_ranges.Count - 1];
             if (range.Start <= minimum) {
@@ -86,10 +135,10 @@ internal sealed class FreeChunkSet {
 
     private int Find(uint value) {
         int low = 0;
-        int high = _ranges.Count - 1;
+        int high = Ranges.Count - 1;
         while (low <= high) {
             int middle = low + (high - low) / 2;
-            FreeChunkRange range = _ranges[middle];
+            FreeChunkRange range = Ranges[middle];
             if (value < range.Start) {
                 high = middle - 1;
                 }
