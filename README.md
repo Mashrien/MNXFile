@@ -82,13 +82,13 @@ cd MNXFile
 ```
 
 Each script reserves a build number automatically. The library/client version is
-`1.3.1-alpha.N`. Use an explicitly reserved build number when preparing the local
+`1.4.0`. Use an explicitly reserved build number when preparing the local
 dependency feed for a matching application build:
 
 ```sh
-MNXBuildNumber=10 ./build.sh --test
+MNXBuildNumber=11 ./build.sh --test
 # Managed NuGet packages only, without building the native library:
-MNXBuildNumber=10 ./build.sh --packages-only
+MNXBuildNumber=11 ./build.sh --packages-only
 ```
 
 PowerShell equivalent: `$env:MNXBuildNumber='10'; .\build.ps1 -Test`.
@@ -108,6 +108,23 @@ versions have not been published to NuGet.org.
 
 Linux arm64 selects the host architecture. Override `MNXBuildRoot`, `MNXReleaseRoot`
 or `MNXFinalRoot` to choose other destinations. Builds do not install the engine.
+
+## Parallel archive reads
+
+The GUI, CLI and native callers use two chunk readers per archive operation by default.
+Set `MNX_READ_WORKERS` to `1`, `2`, `3` or `4` before launching an application.
+For example, `MNX_READ_WORKERS=4 mnx-gui` starts the archiver with four readers.
+One selects the serial reader. This is a runtime setting for existing and new archives.
+
+C# callers can set `archive.Options.ReadWorkers` and await `ExtractFileAsync`,
+`ReadFileRangeAsync` or `VerifyArchiveAsync`. Set `archive.Options.CancellationToken`
+to cancel an operation. Native ABI callers can set the same limit with
+`mnx_set_read_workers(handle, count)`.
+
+Readers combine neighboring physical chunks into bounded positional requests. Each
+worker checks its chunks, with its own AES-GCM instance for encrypted data. Continuous
+compression feeds one decoder in sequence. Small random reads fetch only the chunks
+they need. Header and index reads retain their existing paging behavior.
 
 ## Use the engine
 

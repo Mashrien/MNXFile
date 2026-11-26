@@ -2,7 +2,7 @@ using MNX.Interop;
 
 namespace MNX;
 
-public sealed class Configuration {
+public sealed partial class Configuration {
     public int ProgressReportFrequency { get; set; } = 250;
     public CancellationToken CancellationToken { get; set; }
     public bool OverrideByDefault { get; set; } = true;

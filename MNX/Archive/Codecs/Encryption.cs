@@ -98,7 +98,10 @@ internal sealed class ArchiveCodec : IDisposable {
         return ciphertext;
         }
 
-    internal byte[] DecodeChunk( in ChunkHeader slot, ReadOnlySpan<byte> stored, int expectedLength) {
+    // AesGcm instances have mutable native state. Each parallel reader owns its cipher.
+    internal AesGcm? CreateReadCipher() => _key is null ? null : new AesGcm(_key, TagLength);
+
+    internal byte[] DecodeChunk(in ChunkHeader slot, ReadOnlySpan<byte> stored, int expectedLength, AesGcm? readCipher = null) {
         bool streamed = (slot.Flags & DiskNodeFlags.Streamed) != 0;
         bool expectedStream = _streamCompression && slot.Type != NodeType.Directory;
         if (streamed != expectedStream) {
@@ -116,7 +119,7 @@ internal sealed class ArchiveCodec : IDisposable {
             slot.Hash.CopyTo(authentication);
             Span<byte> associatedData = stackalloc byte[42];
             WriteChunkAad(slot, associatedData);
-            _aes.Decrypt(
+            (readCipher ?? _aes).Decrypt(
                 authentication.Slice(0, NonceLength),
                 stored,
                 authentication.Slice(NonceLength, TagLength),

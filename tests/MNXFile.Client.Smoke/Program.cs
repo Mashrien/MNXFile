@@ -18,7 +18,7 @@ if (args.Length != 0 && args[0] is "--missing" or "--incompatible") {
     }
 
 string engineVersion = LibraryInfo.Version;
-Check(engineVersion.StartsWith("1.3.1-alpha.", StringComparison.Ordinal), "native engine reports its release version without opening an archive");
+Check(engineVersion == "1.4.0", "native engine reports its release version without opening an archive");
 Check(LibraryInfo.FormatVersion == "0.1.8", "native engine reports the semantic storage format without opening an archive");
 Check(Archive.MaximumArchiveBytes == 140_737_488_322_560UL, "client reports the exact physical archive capacity");
 Console.WriteLine("PASS: installed MNXFile version " + engineVersion);
@@ -89,7 +89,8 @@ try {
             Check(prefix.SequenceEqual(contents.AsSpan(17, 83).ToArray()), "stream backwards seek");
             }
         string output = Path.Combine(root, compression + ".out");
-        archive.ExtractFile(fileId, new FileInfo(output), false);
+        archive.Options.ReadWorkers = 4;
+        archive.ExtractFileAsync(fileId, new FileInfo(output), false).GetAwaiter().GetResult();
         Check(File.ReadAllBytes(output).SequenceEqual(contents), "extract bytes");
         archive.AddStreamNow(new MemoryStream([1, 2, 3, 4]), "stream.bin", 4);
         string later = Path.Combine(root, "later.txt");
@@ -111,7 +112,7 @@ try {
         archive.Close();
         archive.Open(path, "ひみつのことば");
         Check(archive.Compression == compression && archive.IsEncrypted && archive.Files.Single().Name == Path.GetFileName(source), "reopen metadata");
-        Check(archive.VerifyArchive() == ReturnCode.Success, "reopen verify");
+        Check(archive.VerifyArchiveAsync().GetAwaiter().GetResult() == ReturnCode.Success, "reopen verify");
         Console.WriteLine("PASS: native client " + compression + " encryption/queue/callbacks/stream/range/extract/key/compact/reopen");
         }
 

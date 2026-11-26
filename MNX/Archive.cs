@@ -663,62 +663,17 @@ public sealed partial class Archive : IDisposable {
 
         lock (_state.SyncRoot) {
             CheckOpen();
-            VFile? file = RequireFile(id);
-            if (UsesStreamCompression) {
-                if ((ulong)offset >= file.SizeOriginal || count == 0) {
-                    return Array.Empty<byte>();
-                    }
-
-                int length = (int)Math.Min((ulong)count, file.SizeOriginal - (ulong)offset);
-                byte[] data = new byte[length];
-                using ContinuousArchiveReadStream decoded = new ContinuousArchiveReadStream(this, file);
-                decoded.Seek(offset, SeekOrigin.Begin);
-                decoded.ReadExactly(data);
-                return data;
+            VFile file = RequireFile(id);
+            if ((ulong)offset >= file.SizeOriginal || count == 0) {
+                return Array.Empty<byte>();
                 }
-
-            using FileStream archive = DiskFile.OpenRead(_state.Path!);
-            return ReadFileRangeCore(archive, file, offset, count);
+            int length = (int)Math.Min((ulong)count, file.SizeOriginal - (ulong)offset);
+            byte[] data = new byte[length];
+            using Stream reader = CreateReadStream(file);
+            reader.Position = offset;
+            reader.ReadExactly(data);
+            return data;
             }
-        }
-
-    private byte[] ReadFileRangeCore(Stream archive, VFile file, long offset, int count) {
-        if ((ulong)offset >= file.SizeOriginal || count == 0) {
-            return Array.Empty<byte>();
-            }
-
-        int length = (int)Math.Min((ulong)count, file.SizeOriginal - (ulong)offset);
-        byte[] output = new byte[length];
-        int copied = 0;
-        long cursor = offset;
-        while (copied < length) {
-            uint sequence;
-            int within;
-            (sequence, within) = file.LocateByte((ulong)cursor);
-            uint index = file.PhysicalChunk(sequence);
-            byte[] payload = ChunkFormat.ReadChunk(
-                archive,
-                index,
-                out ChunkHeader slot,
-                _state.Codec,
-                LogicalChunkLength(file, sequence),
-                _state.ChunkSize
-                );
-            if (slot.Id != file.FileID || slot.Sequence != sequence) {
-                throw new InvalidDataException("Chunk does not match the file index.");
-                }
-
-            if (within >= payload.Length) {
-                throw new InvalidDataException("Chunk length does not cover the requested offset.");
-                }
-
-            int take = Math.Min(length - copied, payload.Length - within);
-            payload.AsSpan(within, take).CopyTo(output.AsSpan(copied));
-            copied += take;
-            cursor += take;
-            }
-
-        return output;
         }
 
     /// <summary>Read a chunk payload; continuous compression returns a slice of the compressed file stream.</summary>
@@ -726,21 +681,11 @@ public sealed partial class Archive : IDisposable {
         lock (_state.SyncRoot) {
             CheckOpen();
             VFile? file = RequireFile(id);
-            uint index = file.PhysicalChunk(sequence);
-            using FileStream archive = DiskFile.OpenRead(_state.Path!);
-            byte[] payload = ChunkFormat.ReadChunk(
-                archive,
-                index,
-                out ChunkHeader slot,
-                _state.Codec,
-                LogicalChunkLength(file, sequence),
-                _state.ChunkSize
-                );
-            if (slot.Id != id || slot.Sequence != sequence) {
-                throw new InvalidDataException("Chunk does not match the file index.");
+            if (sequence >= file.ChunkCount) {
+                throw new ArgumentOutOfRangeException(nameof(sequence));
                 }
-
-            return payload;
+            using ChunkReadWindow reader = new ChunkReadWindow(this, file);
+            return reader.Read(sequence, 1);
             }
         }
 
@@ -749,7 +694,7 @@ public sealed partial class Archive : IDisposable {
         lock (_state.SyncRoot) {
             CheckOpen();
             try {
-                using FileStream archive = DiskFile.OpenRead(_state.Path!);
+                using FileStream archive = ChunkReadWindow.OpenInput(this);
                 ArchiveFormat.HeaderInfo? header = ArchiveFormat.ReadHeader(archive);
                 if (header.version == 7) {
                     archive.Position = _state.ChunkSize;
@@ -791,22 +736,10 @@ public sealed partial class Archive : IDisposable {
                         occupiedChunks = checked(occupiedChunks + extent.Count);
                         }
                     ulong size = 0;
+                    using ChunkReadWindow reader = new ChunkReadWindow(this, file, archive);
                     for (uint sequence = 0; sequence < file.ChunkCount; sequence++) {
-                        uint index = file.PhysicalChunk(sequence);
-                        byte[] payload = ChunkFormat.ReadChunk(
-                            archive,
-                            index,
-                            out ChunkHeader slot,
-                            _state.Codec,
-                            LogicalChunkLength(file, sequence),
-                            _state.ChunkSize
-                            );
-                        uint expectedNext = sequence + 1 < file.ChunkCount ? file.PhysicalChunk(sequence + 1) : 0;
-                        if (payload.Length != LogicalChunkLength(file, sequence) || slot.Id != file.FileID || slot.Sequence != sequence || slot.Next != expectedNext || (sequence == 0 && slot.Type != (file.IsDirectory ? NodeType.Directory : NodeType.File)) || (sequence > 0 && slot.Type != NodeType.Continuation)) {
-                            throw new InvalidDataException($"Chunk chain mismatch for {file.Name}.");
-                            }
-
-                        size += (uint)LogicalChunkLength(file, sequence);
+                        byte[] payload = reader.Read(sequence, file.ChunkCount - sequence);
+                        size += (uint)payload.Length;
                         checkedBytes += _state.ChunkSize;
                         if (progressTimer.ElapsedMilliseconds >= Options.ProgressReportFrequency) {
                             RaiseProgress("verify", checkedBytes, totalBytes);
@@ -820,7 +753,7 @@ public sealed partial class Archive : IDisposable {
 
                     if (UsesStreamCompression && !file.IsDirectory) {
                         using ContinuousArchiveReadStream decoded = new ContinuousArchiveReadStream(this, file);
-                        byte[] buffer = new byte[64 * 1024];
+                        byte[] buffer = CreateTransferBuffer(file.SizeOriginal);
                         long remaining = checked((long)file.SizeOriginal);
                         while (remaining > 0) {
                             int read = decoded.Read(buffer, 0, (int)Math.Min(buffer.Length, remaining));
@@ -867,9 +800,12 @@ public sealed partial class Archive : IDisposable {
     public Stream OpenRead(Guid id) {
         lock (_state.SyncRoot) {
             CheckOpen();
-            VFile? file = RequireFile(id);
-            return UsesStreamCompression ? new ContinuousArchiveReadStream(this, file) : new ArchiveReadStream(this, file);
+            return CreateReadStream(RequireFile(id));
             }
+        }
+
+    private Stream CreateReadStream(VFile file) {
+        return UsesStreamCompression ? new ContinuousArchiveReadStream(this, file) : new ArchiveReadStream(this, file);
         }
 
     /// <summary>Copy a file range through a fixed-size buffer without materializing the range.</summary>
@@ -931,7 +867,7 @@ public sealed partial class Archive : IDisposable {
                     FileMode mode = overwrite ?? Options.OverrideByDefault ? FileMode.Create : FileMode.CreateNew;
                     using (FileStream output = new FileStream(destination.FullName, mode, FileAccess.Write, FileShare.None)) {
                         outputOpened = true;
-                        byte[] buffer = new byte[64 * 1024];
+                        byte[] buffer = CreateTransferBuffer(file.SizeOriginal);
                         long completed = 0;
                         while (true) {
                             Options.CancellationToken.ThrowIfCancellationRequested();
@@ -1175,8 +1111,9 @@ public sealed partial class Archive : IDisposable {
         return result;
         }
 
-    private int LogicalChunkLength(VFile file, uint sequence) {
-        return file.LogicalLength(sequence);
+    private byte[] CreateTransferBuffer(ulong fileSize) {
+        int capacity = Options.ReadWorkers == 1 ? 64 * 1024 : Options.ReadWorkers * ChunkReadWindow.BytesPerWorker;
+        return new byte[(int)Math.Clamp(fileSize, 1, (ulong)capacity)];
         }
 
     private static VFile FromSource(Guid id, Guid parent, string name, FileSystemInfo source, bool directory, ulong size, uint first) => FromMetadata(id, parent, name, SourceMetadata(source), directory, size, first);

@@ -440,6 +440,14 @@ public static unsafe partial class Exports {
     public static int Delete(ulong handle, byte* id) => Run(handle, context => Result(context.Archive.DeleteFileFromArchive(Id(id))));
     [UnmanagedCallersOnly(EntryPoint = "mnx_compact", CallConvs = [typeof(CallConvCdecl)])]
     public static int Compact(ulong handle) => Run(handle, context => Result(context.Archive.CompactArchive()));
+    [UnmanagedCallersOnly(EntryPoint = "mnx_set_read_workers", CallConvs = [typeof(CallConvCdecl)])]
+    public static int SetReadWorkers(ulong handle, int workers) {
+        return Run(handle, context => {
+            context.Archive.Options.ReadWorkers = workers;
+            return 0;
+            });
+        }
+
     [UnmanagedCallersOnly(EntryPoint = "mnx_verify", CallConvs = [typeof(CallConvCdecl)])]
     public static int Verify(ulong handle) => Run(handle, context => Result(context.Archive.VerifyArchive(), true));
     [UnmanagedCallersOnly(EntryPoint = "mnx_last_error", CallConvs = [typeof(CallConvCdecl)])]

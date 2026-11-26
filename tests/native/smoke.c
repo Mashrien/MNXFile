@@ -130,6 +130,8 @@ int main(int argc, char **argv) {
         ok(mnx_extract_directory(archive, tree_id, extracted, 0), "extract directory tree");
         snprintf(extracted, sizeof extracted, "%s/extracted-tree-%d/nested.bin", argv[1], codecs[c]);
         check_extracted(extracted, 123457, 43);
+        ok(mnx_set_read_workers(archive, 4), "select four read workers");
+        if (mnx_set_read_workers(archive, 5) != MNX_INVALID_ARGUMENT) return 1;
         ok(mnx_verify(archive), "native verify");
         mnx_archive_info before = {0}, after = {0};
         before.struct_size = sizeof before; after.struct_size = sizeof after;
