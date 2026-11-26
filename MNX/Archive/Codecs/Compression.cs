@@ -238,7 +238,8 @@ internal static class ArchiveCompressionIO {
     }
 
 internal sealed class StoredPayloadStream(Archive owner, VFile file) : Stream {
-    private readonly FileStream _input = DiskFile.OpenRead(owner.State.Path!);
+    private readonly ChunkReadWindow _chunks = new ChunkReadWindow(owner, file);
+    internal uint RequestedChunks { get; set; } = 1;
     private uint _chunkSequence;
     private byte[] _payload = Array.Empty<byte>();
     private int _offset;
@@ -263,17 +264,8 @@ internal sealed class StoredPayloadStream(Archive owner, VFile file) : Stream {
                 return 0;
                 }
 
-            uint physical = file.PhysicalChunk(_chunkSequence);
-            byte[] payload = ChunkFormat.ReadChunk(
-                _input,
-                physical,
-                out ChunkHeader slot,
-                owner.State.Codec,
-                file.LogicalLength(_chunkSequence),
-                owner.State.ChunkSize
-                );
-            uint expectedNext = _chunkSequence + 1 < file.ChunkCount ? file.PhysicalChunk(_chunkSequence + 1) : 0;
-            if (slot.Id != file.FileID || slot.Sequence != _chunkSequence || slot.Next != expectedNext || slot.Type != (_chunkSequence == 0 ? NodeType.File : NodeType.Continuation) || payload.Length == 0) {
+            byte[] payload = _chunks.Read(_chunkSequence, RequestedChunks);
+            if (payload.Length == 0) {
                 throw new InvalidDataException("Compressed file chunk chain is invalid.");
                 }
 
@@ -293,7 +285,7 @@ internal sealed class StoredPayloadStream(Archive owner, VFile file) : Stream {
 
     protected override void Dispose(bool disposing) {
         if (disposing) {
-            _input.Dispose();
+            _chunks.Dispose();
             }
 
         base.Dispose(disposing);
@@ -340,6 +332,9 @@ internal sealed class ContinuousArchiveReadStream : Stream {
                 }
 
             int wanted = (int)Math.Min(output.Length, Length - _position);
+            // A large sequential read can feed the decoder from a bounded group
+            // of stored chunks. A tiny preview or range starts with just one.
+            _payload.RequestedChunks = (uint)Math.Max(1, (wanted + (long)_owner.ChunkSize - 1) / _owner.ChunkSize);
             int read = _decoder.Read(output[..wanted]);
             if (read == 0) {
                 throw new InvalidDataException("Compressed file ended before its indexed length.");

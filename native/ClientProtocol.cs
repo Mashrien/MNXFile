@@ -173,8 +173,11 @@ public static unsafe partial class Exports {
                 context.Cancellation = new CancellationTokenSource();
                 return;
                 }
-            context.Active = true;
             Archive target = context.Archive;
+            if (input.ReadWorkers.HasValue) {
+                target.Options.ReadWorkers = input.ReadWorkers.Value;
+                }
+            context.Active = true;
             target.Options.CancellationToken = context.Cancellation.Token;
             target.Options.OverrideByDefault = input.Overwrite;
             target.Options.ProgressReportFrequency = Math.Max(1, input.Interval);

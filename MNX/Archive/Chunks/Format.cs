@@ -50,28 +50,34 @@ internal static class ChunkFormat {
                 }
 
             stream.ReadExactly(chunkBytes);
-            if (!TryParseHeader(chunkBytes, index, chunkSize, out slot)) {
-                throw new InvalidDataException($"Chunk {index} is empty.");
-                }
-            int payloadStart = slot.Type == NodeType.Continuation ? NextHeaderSize : FirstHeaderSize;
-            ReadOnlySpan<byte> stored = buffer.AsSpan(payloadStart, checked((int)slot.DataLength));
-            if (codec is not null) {
-                return codec.DecodeChunk( in slot, stored, expectedPlainLength);
-                }
-
-            byte[] payload = stored.ToArray();
-            Span<byte> payloadHash = stackalloc byte[32];
-            SHA256.HashData(payload, payloadHash);
-            NodeFlags dataFlags = NodeFlags.Compressed | NodeFlags.Encrypted | NodeFlags.Streamed;
-            if ((slot.Flags & dataFlags) != NodeFlags.None || !slot.Hash.Matches(payloadHash)) {
-                throw new InvalidDataException($"Chunk {index} payload checksum does not match.");
-                }
-
-            return payload;
+            return DecodeChunk(chunkBytes, index, out slot, codec, expectedPlainLength);
             }
         finally {
             ArrayPool<byte>.Shared.Return(buffer);
             }
+        }
+
+    internal static byte[] DecodeChunk(ReadOnlySpan<byte> chunkBytes, uint index, out ChunkHeader slot,
+        ArchiveCodec? codec, int expectedPlainLength, AesGcm? readCipher = null) {
+        int chunkSize = chunkBytes.Length;
+        if (!TryParseHeader(chunkBytes, index, chunkSize, out slot)) {
+            throw new InvalidDataException($"Chunk {index} is empty.");
+            }
+        int payloadStart = slot.Type == NodeType.Continuation ? NextHeaderSize : FirstHeaderSize;
+        ReadOnlySpan<byte> stored = chunkBytes.Slice(payloadStart, checked((int)slot.DataLength));
+        if (codec is not null) {
+            return codec.DecodeChunk(in slot, stored, expectedPlainLength, readCipher);
+            }
+
+        byte[] payload = stored.ToArray();
+        Span<byte> payloadHash = stackalloc byte[32];
+        SHA256.HashData(payload, payloadHash);
+        NodeFlags dataFlags = NodeFlags.Compressed | NodeFlags.Encrypted | NodeFlags.Streamed;
+        if ((slot.Flags & dataFlags) != NodeFlags.None || !slot.Hash.Matches(payloadHash)) {
+            throw new InvalidDataException($"Chunk {index} payload checksum does not match.");
+            }
+
+        return payload;
         }
 
     // Nullable adapter for standalone header inspection; the chunk loop uses an out value.

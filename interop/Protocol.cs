@@ -17,6 +17,7 @@ internal sealed class ClientRequest {
     public int Level { get; set; } = 4;
     public int ChunkSize { get; set; } = 32768;
     public int Layout { get; set; } = 1;
+    public int? ReadWorkers { get; set; }
     public int Interval { get; set; } = 250;
     public bool Overwrite { get; set; } = true;
     public bool ExportKey { get; set; }

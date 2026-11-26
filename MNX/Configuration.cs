@@ -3,7 +3,7 @@ using System.Collections.ObjectModel;
 namespace MNX;
 
 /// <summary>Configuration for read and write operations.</summary>
-public sealed class Configuration {
+public sealed partial class Configuration {
     public int ProgressReportFrequency { get; set; } = 250;
     /// <summary>Cooperative cancellation for queue scans and adding files; completed entries remain valid.</summary>
     public CancellationToken CancellationToken { get; set; }

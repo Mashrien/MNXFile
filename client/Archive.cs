@@ -217,6 +217,7 @@ public sealed unsafe partial class Archive : IDisposable {
                 }
 
             request.Handle = _handle;
+            request.ReadWorkers = Options.ReadWorkers;
             request.Interval = Options.ProgressReportFrequency;
             // Reset cancellation before registering the new token, so cancellation
             // between registration and entry into native code is not lost.

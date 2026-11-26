@@ -77,7 +77,7 @@
     </MNXAllocateBuildNumber>
     <PropertyGroup>
       <MNXBuildNumberReserved>true</MNXBuildNumberReserved>
-      <Version>$(MNXVersionPrefix)-alpha.$(MNXBuildNumber)</Version>
+      <Version>$(MNXVersionPrefix)</Version>
       <InformationalVersion>$(Version)</InformationalVersion>
       <AssemblyVersion>$(MNXVersionPrefix).$(MNXBuildNumber)</AssemblyVersion>
       <FileVersion>$(AssemblyVersion)</FileVersion>

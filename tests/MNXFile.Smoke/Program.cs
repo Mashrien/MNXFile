@@ -5,6 +5,10 @@ using DiskFile = System.IO.File;
 string work = Path.Combine(Path.GetTempPath(), "mnx-smoke-" + Guid.NewGuid().ToString("N"));
 Directory.CreateDirectory(work);
 try {
+    if (args.Contains("--parallel-only")) {
+        await ParallelReadSmoke.Run(work);
+        return;
+        }
     CapacitySmoke.Run();
     if (args.Contains("--capacity-only")) {
         return;
@@ -23,6 +27,7 @@ try {
         return;
         }
 
+    await ParallelReadSmoke.Run(work);
     StorageLayoutSmoke.Run();
     StreamWindowSmoke.Run(work);
     FilenameSmoke.Run(work);

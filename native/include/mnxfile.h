@@ -117,6 +117,8 @@ MNX_API int32_t MNX_CALL mnx_extract_directory(mnx_handle archive, const char* i
     const char* destination, int32_t overwrite);
 MNX_API int32_t MNX_CALL mnx_delete(mnx_handle archive, const char* id);
 MNX_API int32_t MNX_CALL mnx_compact(mnx_handle archive);
+/* Set the runtime chunk-read concurrency for this handle (1..4). */
+MNX_API int32_t MNX_CALL mnx_set_read_workers(mnx_handle archive, int32_t workers);
 MNX_API int32_t MNX_CALL mnx_verify(mnx_handle archive);
 /* Thread-local diagnostic from the last ordinary call. Queries preserve it.
    required is UTF-8 bytes including NUL. NULL + zero capacity queries size. */

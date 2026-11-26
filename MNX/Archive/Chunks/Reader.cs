@@ -9,9 +9,7 @@ namespace MNX.Storage;
 
 internal sealed class ArchiveReadStream(Archive archive, VFile file) : Stream {
     private long _position;
-    private uint? _cachedSequence;
-    private byte[] _cachedPayload = Array.Empty<byte>();
-    private readonly FileStream _input = DiskFile.OpenRead(archive.State.Path!);
+    private readonly ChunkReadWindow _chunks = new ChunkReadWindow(archive, file);
     public override bool CanRead => true;
     public override bool CanSeek => true;
     public override bool CanWrite => false;
@@ -41,36 +39,18 @@ internal sealed class ArchiveReadStream(Archive archive, VFile file) : Stream {
                 }
 
             int requested = (int)Math.Min(destination.Length, Length - _position);
+            (uint lastSequence, _) = file.LocateByte((ulong)(_position + requested - 1));
             int copied = 0;
             while (copied < requested) {
                 (uint sequence, int withinChunk) = file.LocateByte((ulong)_position);
-                if (_cachedSequence != sequence) {
-                    uint physicalChunk = file.PhysicalChunk(sequence);
-                    byte[] payload = ChunkFormat.ReadChunk(
-                        _input,
-                        physicalChunk,
-                        out ChunkHeader header,
-                        archive.State.Codec,
-                        file.LogicalLength(sequence),
-                        archive.State.ChunkSize
-                        );
-                    uint expectedNext = sequence + 1 < file.ChunkCount ? file.PhysicalChunk(sequence + 1) : 0;
-                    NodeType expectedType = sequence == 0 ? NodeType.File : NodeType.Continuation;
-                    if (header.Id != file.FileID || header.Sequence != sequence || header.Type != expectedType || header.Next != expectedNext) {
-                        throw new InvalidDataException("Chunk does not match the file index.");
-                        }
-
-                    _cachedPayload = payload;
-                    _cachedSequence = sequence;
-                    }
-
-                int available = _cachedPayload.Length - withinChunk;
+                byte[] payload = _chunks.Read(sequence, lastSequence - sequence + 1);
+                int available = payload.Length - withinChunk;
                 if (available <= 0) {
                     throw new InvalidDataException("Chunk length does not cover the requested offset.");
                     }
 
                 int take = Math.Min(requested - copied, available);
-                _cachedPayload.AsSpan(withinChunk, take).CopyTo(destination.Slice(copied, take));
+                payload.AsSpan(withinChunk, take).CopyTo(destination.Slice(copied, take));
                 copied += take;
                 _position += take;
                 }
@@ -94,7 +74,7 @@ internal sealed class ArchiveReadStream(Archive archive, VFile file) : Stream {
 
     protected override void Dispose(bool disposing) {
         if (disposing) {
-            _input.Dispose();
+            _chunks.Dispose();
             }
 
         base.Dispose(disposing);
