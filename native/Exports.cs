@@ -442,10 +442,7 @@ public static unsafe partial class Exports {
     public static int Compact(ulong handle) => Run(handle, context => Result(context.Archive.CompactArchive()));
     [UnmanagedCallersOnly(EntryPoint = "mnx_set_read_workers", CallConvs = [typeof(CallConvCdecl)])]
     public static int SetReadWorkers(ulong handle, int workers) {
-        return Run(handle, context => {
-            context.Archive.Options.ReadWorkers = workers;
-            return 0;
-            });
+        return Run(handle, context => context.Archive.Options.ReadWorkers = workers);
         }
 
     [UnmanagedCallersOnly(EntryPoint = "mnx_verify", CallConvs = [typeof(CallConvCdecl)])]
